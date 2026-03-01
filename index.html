@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>せどりGPS管理PRO</title>
+<style>
+body{
+  font-family: -apple-system;
+  padding:20px;
+  background:#f4f6f8;
+}
+h1{font-size:20px;}
+input,button{
+  padding:10px;
+  margin:5px 0;
+  width:100%;
+  font-size:16px;
+}
+button{
+  background:#007aff;
+  color:white;
+  border:none;
+  border-radius:8px;
+}
+.store{
+  background:white;
+  padding:10px;
+  margin-top:10px;
+  border-radius:10px;
+  box-shadow:0 2px 5px rgba(0,0,0,0.1);
+}
+.small{
+  font-size:14px;
+  color:gray;
+}
+</style>
+</head>
+<body>
+
+<h1>せどりGPS管理PRO</h1>
+
+<input id="storeName" placeholder="店舗名を入力">
+<button onclick="addStore()">店舗追加</button>
+
+<div id="storeList"></div>
+
+<script>
+let stores = JSON.parse(localStorage.getItem("stores")) || [];
+
+function save(){
+  localStorage.setItem("stores", JSON.stringify(stores));
+}
+
+function addStore(){
+  const name = document.getElementById("storeName").value;
+  if(!name) return;
+  stores.push({
+    name:name,
+    visits:0,
+    buyDays:0,
+    items:0
+  });
+  document.getElementById("storeName").value="";
+  save();
+  render();
+}
+
+function visit(index){
+  stores[index].visits++;
+  save();
+  render();
+}
+
+function bought(index){
+  stores[index].buyDays++;
+  const num = prompt("今日の仕入れ個数は？");
+  if(num){
+    stores[index].items += parseInt(num);
+  }
+  save();
+  render();
+}
+
+function render(){
+  const list = document.getElementById("storeList");
+  list.innerHTML="";
+  stores.forEach((s,i)=>{
+    const rate = s.visits>0 ? 
+      ((s.buyDays/s.visits)*100).toFixed(1) : 0;
+
+    list.innerHTML+=`
+      <div class="store">
+        <b>${s.name}</b><br>
+        訪問回数：${s.visits}回<br>
+        仕入れ成功日：${s.buyDays}日<br>
+        仕入れ成功率：${rate}%<br>
+        総仕入れ個数：${s.items}個<br>
+        <button onclick="visit(${i})">訪問した</button>
+        <button onclick="bought(${i})">仕入れ成功</button>
+      </div>
+    `;
+  });
+}
+
+render();
+</script>
+
+</body>
+</html>
