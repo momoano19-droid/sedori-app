@@ -30,7 +30,6 @@
   .chip{background:#eef2f7;color:#123;border-radius:999px;padding:8px 12px;font-size:14px;border:1px solid #dfe6f2;width:auto;}
   .chip.primary{background:#007aff;color:#fff;border-color:#007aff;}
   .chip.gray{background:#f0f3f8;color:#444;}
-  .chip.danger{background:#ff3b30;color:#fff;border-color:#ff3b30;}
   /* modal */
   .overlay{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.35);display:none;align-items:center;justify-content:center;padding:16px;z-index:9999;}
   .modal{background:#fff;border-radius:14px;max-width:520px;width:100%;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,0.25);}
@@ -85,7 +84,7 @@
   </div>
 
   <div class="gray" style="margin-top:8px;">
-    ※ 仕入れ個数を入れると「カテゴリ選択（ボタン）」が出ます。<br>
+    ※ 個数を入れると「カテゴリ選択（ボタン最大24）」が出ます（クイック最大12）。<br>
     ※ ルート最適化は「URLから座標を登録した店舗」だけ距離/スコアが出ます。
   </div>
 </div>
@@ -113,6 +112,11 @@
 </div>
 
 <script>
+/** ===== 設定値 ===== */
+const QUICK_LIMIT = 12; // 店ごとのクイック最大
+const CHIP_LIMIT  = 24; // 表示するカテゴリボタン最大（カテゴリなしは別枠）
+
+/** ===== データ ===== */
 let stores = JSON.parse(localStorage.getItem("stores")) || [];
 let layout = localStorage.getItem("layout") || "detail";
 let lastPos = null;
@@ -122,8 +126,7 @@ let modalState = {
   open:false,
   storeIndex:null,
   deltaItems:0,
-  selectedCat:"",
-  pendingTotalAdjust:false
+  selectedCat:""
 };
 
 // 互換性補完
@@ -139,8 +142,7 @@ stores = stores.map(s => ({
   lng: (typeof s.lng === "number") ? s.lng : null,
   defaultCategory: (s.defaultCategory ?? "").trim(),
   categoryCounts: (s.categoryCounts && typeof s.categoryCounts === "object") ? s.categoryCounts : {},
-  // NEW: よく使うカテゴリ（店ごとのショートカット）
-  quickCategories: Array.isArray(s.quickCategories) ? s.quickCategories.filter(Boolean) : []
+  quickCategories: Array.isArray(s.quickCategories) ? s.quickCategories.filter(Boolean).slice(0,QUICK_LIMIT) : []
 }));
 
 function clampNonNeg(n){ return Math.max(0, Number(n) || 0); }
@@ -148,6 +150,7 @@ function save(){ localStorage.setItem("stores", JSON.stringify(stores)); }
 
 function setLayout(v){ layout=v; localStorage.setItem("layout",layout); render(); }
 
+/** ===== 座標抽出（Google Maps URL） ===== */
 function extractLatLng(url){
   if(!url) return null;
   let m = url.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
@@ -157,6 +160,7 @@ function extractLatLng(url){
   return null;
 }
 
+/** ===== 店舗追加 ===== */
 function addStore(){
   const name = document.getElementById("storeName").value.trim();
   const pref = document.getElementById("prefName").value.trim();
@@ -167,9 +171,15 @@ function addStore(){
   let lat=null, lng=null;
   if(mapUrl){
     const c = extractLatLng(mapUrl);
-    if(!c){ alert("GoogleマップURLから座標が取れませんでした。\n「共有→リンクをコピー」したURLを貼ってください。"); return; }
+    if(!c){
+      alert("GoogleマップURLから座標が取れませんでした。\n「共有→リンクをコピー」したURLを貼ってください。");
+      return;
+    }
     lat=c.lat; lng=c.lng;
   }
+
+  const quick = [];
+  if(defaultCategory) quick.push(defaultCategory);
 
   stores.push({
     name,pref,
@@ -177,7 +187,7 @@ function addStore(){
     mapUrl,lat,lng,
     defaultCategory,
     categoryCounts:{},
-    quickCategories: defaultCategory ? [defaultCategory] : []
+    quickCategories: quick
   });
 
   document.getElementById("storeName").value="";
@@ -187,24 +197,25 @@ function addStore(){
   save(); render();
 }
 
-// --- カテゴリ集計 ---
+/** ===== カテゴリ集計 ===== */
 function addItemsToCategory(i, cat, delta){
   const s = stores[i];
   const category = String(cat||"").trim();
   if(!category) return;
+
   if(!s.categoryCounts || typeof s.categoryCounts !== "object") s.categoryCounts = {};
   const cur = clampNonNeg(s.categoryCounts[category] ?? 0);
   const next = clampNonNeg(cur + delta);
   if(next === 0) delete s.categoryCounts[category];
   else s.categoryCounts[category] = next;
 
-  // 候補に反映（店のクイックに追加 & 全体候補にも乗る）
+  // クイックに反映（最大12）
   if(!s.quickCategories) s.quickCategories = [];
   if(!s.quickCategories.includes(category)){
     s.quickCategories.unshift(category);
-    s.quickCategories = s.quickCategories.slice(0,6);
+    s.quickCategories = s.quickCategories.slice(0,QUICK_LIMIT);
   }
-  if(!s.defaultCategory) s.defaultCategory = category; // まだ未設定なら初回カテゴリをデフォに
+  if(!s.defaultCategory) s.defaultCategory = category;
 }
 
 function getAllCategories(){
@@ -212,10 +223,8 @@ function getAllCategories(){
   stores.forEach(s=>{
     const dc = (s.defaultCategory||"").trim();
     if(dc) set.add(dc);
-    const qc = s.quickCategories || [];
-    qc.forEach(c=>{ if(String(c).trim()) set.add(String(c).trim()); });
-    const cc = s.categoryCounts || {};
-    Object.keys(cc).forEach(k=>{ if(k.trim()) set.add(k.trim()); });
+    (s.quickCategories||[]).forEach(c=>{ c=String(c).trim(); if(c) set.add(c); });
+    Object.keys(s.categoryCounts||{}).forEach(k=>{ k=String(k).trim(); if(k) set.add(k); });
   });
   return Array.from(set).sort((a,b)=>a.localeCompare(b,'ja'));
 }
@@ -230,7 +239,7 @@ function categorySummary(s){
   return `（${top.join(" / ")}${more}）`;
 }
 
-// --- モーダル：カテゴリをボタンで選ぶ ---
+/** ===== モーダル ===== */
 function openCategoryModal(storeIndex, deltaItems, title){
   const s = stores[storeIndex];
   modalState.open = true;
@@ -243,7 +252,6 @@ function openCategoryModal(storeIndex, deltaItems, title){
     `店舗：${s.name} / 個数：${deltaItems}　（ボタンで選択。無ければ下で追加）`;
 
   document.getElementById("customCat").value = "";
-
   rebuildChips();
   document.getElementById("overlay").style.display = "flex";
 }
@@ -255,57 +263,52 @@ function rebuildChips(){
   const s = stores[modalState.storeIndex];
   const chips = [];
 
-  // 1) 店のクイック（最大6）
-  (s.quickCategories||[]).forEach(c=>{ if(String(c).trim()) chips.push(String(c).trim()); });
+  // 1) 店のクイック（最大12）
+  (s.quickCategories||[]).forEach(c=>{
+    c = String(c).trim();
+    if(c && !chips.includes(c)) chips.push(c);
+  });
 
-  // 2) 追加で全体候補から補完（上位8）
-  const all = getAllCategories();
-  all.forEach(c=>{
-    if(chips.length >= 10) return;
+  // 2) 全体候補から補完（最大24）
+  getAllCategories().forEach(c=>{
+    if(chips.length >= CHIP_LIMIT) return;
     if(!chips.includes(c)) chips.push(c);
   });
 
-  // 3) デフォルトが候補に無い場合は入れる
+  // 3) 選択中が候補に無い場合は入れる
   if(modalState.selectedCat && !chips.includes(modalState.selectedCat)){
     chips.unshift(modalState.selectedCat);
   }
 
-  // チップ描画
-  chips.forEach(cat=>{
+  chips.slice(0,CHIP_LIMIT).forEach(cat=>{
     const btn = document.createElement("button");
     btn.className = "chip" + (cat === modalState.selectedCat ? " primary" : "");
     btn.type = "button";
     btn.textContent = cat;
-    btn.onclick = () => {
-      modalState.selectedCat = cat;
-      rebuildChips();
-    };
+    btn.onclick = () => { modalState.selectedCat = cat; rebuildChips(); };
     area.appendChild(btn);
   });
 
-  // 空欄カテゴリも許可（集計しない）
+  // カテゴリなし（内訳に加算しない）
   const noneBtn = document.createElement("button");
   noneBtn.className = "chip gray" + (!modalState.selectedCat ? " primary" : "");
   noneBtn.type="button";
   noneBtn.textContent = "カテゴリなし";
-  noneBtn.onclick = () => {
-    modalState.selectedCat = "";
-    rebuildChips();
-  };
+  noneBtn.onclick = () => { modalState.selectedCat = ""; rebuildChips(); };
   area.appendChild(noneBtn);
 }
 
 function addCustomCategory(){
   const v = document.getElementById("customCat").value.trim();
   if(!v) return;
+
   modalState.selectedCat = v;
 
-  // いったん店のクイックに追加して、すぐボタンに出るように
   const s = stores[modalState.storeIndex];
   if(!s.quickCategories) s.quickCategories=[];
   if(!s.quickCategories.includes(v)){
     s.quickCategories.unshift(v);
-    s.quickCategories = s.quickCategories.slice(0,6);
+    s.quickCategories = s.quickCategories.slice(0,QUICK_LIMIT);
   }
   rebuildChips();
   document.getElementById("customCat").value = "";
@@ -325,7 +328,6 @@ function closeModal(commit){
   const delta = modalState.deltaItems;
   const cat = modalState.selectedCat;
 
-  // 個数反映（合計 & カテゴリ内訳）
   if(delta !== 0){
     stores[i].items = clampNonNeg(stores[i].items + delta);
     addItemsToCategory(i, cat, delta);
@@ -335,7 +337,7 @@ function closeModal(commit){
   render();
 }
 
-// --- 操作 ---
+/** ===== 操作 ===== */
 function visit(i){ stores[i].visits++; save(); render(); }
 function visitMinus(i){
   stores[i].visits = clampNonNeg(stores[i].visits - 1);
@@ -387,7 +389,7 @@ function profitMinus(i){
   save(); render();
 }
 
-// 設定：現在値入りで編集（店のクイックカテゴリも編集）
+// 設定（現在値入り / クイック最大12）
 function editStore(i){
   const s = stores[i];
 
@@ -405,14 +407,17 @@ function editStore(i){
   const newDefaultCat = prompt("デフォルトカテゴリ（現在値入り・空欄OK）", (s.defaultCategory||"").trim());
   if(newDefaultCat === null) return;
 
-  const newQuick = prompt("よく使うカテゴリ（/区切り、例：本/家電/ホビー）", (s.quickCategories||[]).join("/"));
+  const newQuick = prompt("よく使うカテゴリ（/区切り、最大12）", (s.quickCategories||[]).join("/"));
   if(newQuick === null) return;
 
   let lat=s.lat,lng=s.lng;
   const urlTrim = String(newUrl).trim();
   if(urlTrim){
     const c = extractLatLng(urlTrim);
-    if(!c){ alert("URLから座標が取れませんでした。\n「共有→リンクをコピー」したURLを貼ってください。"); return; }
+    if(!c){
+      alert("URLから座標が取れませんでした。\n「共有→リンクをコピー」したURLを貼ってください。");
+      return;
+    }
     lat=c.lat; lng=c.lng;
   } else {
     lat=null; lng=null;
@@ -423,7 +428,7 @@ function editStore(i){
   s.mapUrl = urlTrim;
   s.lat = lat; s.lng = lng;
   s.defaultCategory = String(newDefaultCat).trim();
-  s.quickCategories = String(newQuick).split("/").map(x=>x.trim()).filter(Boolean).slice(0,6);
+  s.quickCategories = String(newQuick).split("/").map(x=>x.trim()).filter(Boolean).slice(0,QUICK_LIMIT);
 
   save(); render();
 }
@@ -435,7 +440,7 @@ function deleteStore(i){
   save(); render();
 }
 
-// 指標
+/** ===== 指標 ===== */
 function calcMetrics(s){
   const visits = clampNonNeg(s.visits);
   const success = clampNonNeg(s.buyDays);
@@ -450,7 +455,7 @@ function calcMetrics(s){
   return {visits, success, items, profit, rate, avgProfit, expected, profitPerItem};
 }
 
-// 距離
+/** ===== 距離 ===== */
 function distanceKm(lat1,lng1,lat2,lng2){
   const R = 6371;
   const dLat = (lat2-lat1) * Math.PI/180;
@@ -464,7 +469,10 @@ function distanceKm(lat1,lng1,lat2,lng2){
 }
 
 function optimizeRoute(){
-  if(!navigator.geolocation){ alert("この端末では位置情報が使えません。"); return; }
+  if(!navigator.geolocation){
+    alert("この端末では位置情報が使えません。");
+    return;
+  }
   navigator.geolocation.getCurrentPosition(
     (pos)=>{
       lastPos = {lat: pos.coords.latitude, lng: pos.coords.longitude};
@@ -478,7 +486,7 @@ function optimizeRoute(){
   );
 }
 
-// フィルタ候補
+/** ===== フィルタ ===== */
 function buildPrefFilter(){
   const prefSet = new Set();
   stores.forEach(s => { if((s.pref||"").trim()) prefSet.add(s.pref.trim()); });
@@ -504,6 +512,7 @@ function matchesQuery(s, q){
   return t.includes(q.toLowerCase());
 }
 
+/** ===== 描画 ===== */
 function render(){
   buildPrefFilter();
 
@@ -514,24 +523,24 @@ function render(){
 
   const filter = document.getElementById("prefFilter").value;
   const q = (document.getElementById("q").value || "").trim();
-
   const minExpected = clampNonNeg(parseFloat(document.getElementById("minExpected").value || "0"));
   const minRate = clampNonNeg(parseFloat(document.getElementById("minRate").value || "0"));
   const sortType = document.getElementById("sortType").value;
 
-  let view = stores.slice()
-    .filter(s => matchesQuery(s, q))
-    .map(s => {
-      const m = calcMetrics(s);
-      let dist=null, score=null;
-      if(lastPos && typeof s.lat === "number" && typeof s.lng === "number"){
-        dist = distanceKm(lastPos.lat,lastPos.lng,s.lat,s.lng);
-        score = m.expected / (dist + 0.2);
-      }
-      return {...s, _m:m, _dist:dist, _score:score};
-    })
-    .filter(s => s._m.expected >= minExpected && s._m.rate >= minRate);
+  // idxを必ず持たせる（バグ防止）
+  let view = stores.map((s, idx) => {
+    const m = calcMetrics(s);
+    let dist=null, score=null;
+    if(lastPos && typeof s.lat === "number" && typeof s.lng === "number"){
+      dist = distanceKm(lastPos.lat,lastPos.lng,s.lat,s.lng);
+      score = m.expected / (dist + 0.2);
+    }
+    return {...s, _idx: idx, _m: m, _dist: dist, _score: score};
+  })
+  .filter(s => matchesQuery(s, q))
+  .filter(s => s._m.expected >= minExpected && s._m.rate >= minRate);
 
+  // 検索中は検索優先。検索してない時だけ都道府県フィルタ適用
   if(!q && filter !== "__ALL__"){
     view = view.filter(s => (s.pref||"").trim() === filter);
   }
@@ -550,6 +559,7 @@ function render(){
     grouped.set(filter, view);
   }
 
+  // sort inside group
   for(const [k, arr] of grouped.entries()){
     arr.sort((a,b)=>{
       if(sortType === "route"){
@@ -568,14 +578,14 @@ function render(){
   const list = document.getElementById("storeList");
   list.innerHTML = "";
 
-  Array.from(grouped.keys()).forEach(prefKey=>{
-    const arr = grouped.get(prefKey) || [];
+  Array.from(grouped.keys()).forEach(groupKey=>{
+    const arr = grouped.get(groupKey) || [];
     if(arr.length===0) return;
 
-    list.innerHTML += `<div class="sectionTitle">${escapeHtml(prefKey)}</div>`;
+    list.innerHTML += `<div class="sectionTitle">${escapeHtml(groupKey)}</div>`;
 
     arr.forEach(s=>{
-      const idx = stores.indexOf(stores.find(x=>x===s) || stores.find(x=>x.name===s.name && x.pref===s.pref) || stores[0]);
+      const i = s._idx;
       const m = s._m;
       const distText = (typeof s._dist === "number") ? `${s._dist.toFixed(1)}km` : "—";
       const scoreText = (typeof s._score === "number") ? `${Math.round(s._score)} /km` : "—";
@@ -600,8 +610,8 @@ function render(){
               <div class="pill"><b>個数</b> ${m.items}個${escapeHtml(catSum)}</div>
             </div>
             <div class="grid" style="margin-top:10px;">
-              <button class="smallbtn neutral" onclick="editStore(${idx})">設定</button>
-              <button class="smallbtn danger" onclick="deleteStore(${idx})">削除</button>
+              <button class="smallbtn neutral" onclick="editStore(${i})">設定</button>
+              <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
             </div>
           </div>
         `;
@@ -622,8 +632,8 @@ function render(){
             </div>
             <div class="gray" style="margin-top:8px;">※ スコア＝期待値÷距離</div>
             <div class="grid" style="margin-top:10px;">
-              <button class="smallbtn neutral" onclick="editStore(${idx})">設定</button>
-              <button class="smallbtn danger" onclick="deleteStore(${idx})">削除</button>
+              <button class="smallbtn neutral" onclick="editStore(${i})">設定</button>
+              <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
             </div>
           </div>
         `;
@@ -640,16 +650,18 @@ function render(){
               <div class="pill"><b>距離</b> ${distText}</div>
               <div class="pill"><b>スコア</b> ${scoreText}</div>
               <div class="pill"><b>個数</b> ${m.items}個${escapeHtml(catSum)}</div>
+              <div class="pill"><b>訪問</b> ${m.visits}</div>
+              <div class="pill"><b>成功</b> ${m.success}</div>
             </div>
             <div class="grid" style="margin-top:10px;">
-              <button class="smallbtn" onclick="visit(${idx})">訪問＋</button>
-              <button class="smallbtn danger" onclick="visitMinus(${idx})">訪問−</button>
-              <button class="smallbtn" onclick="boughtPlus(${idx})">成功＋</button>
-              <button class="smallbtn danger" onclick="boughtMinus(${idx})">成功−</button>
-              <button class="smallbtn" onclick="itemsPlus(${idx})">個数＋</button>
-              <button class="smallbtn danger" onclick="itemsMinus(${idx})">個数−</button>
-              <button class="smallbtn neutral" onclick="editStore(${idx})">設定</button>
-              <button class="smallbtn danger" onclick="deleteStore(${idx})">削除</button>
+              <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
+              <button class="smallbtn danger" onclick="visitMinus(${i})">訪問−</button>
+              <button class="smallbtn" onclick="boughtPlus(${i})">成功＋</button>
+              <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
+              <button class="smallbtn" onclick="itemsPlus(${i})">個数＋</button>
+              <button class="smallbtn danger" onclick="itemsMinus(${i})">個数−</button>
+              <button class="smallbtn neutral" onclick="editStore(${i})">設定</button>
+              <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
             </div>
           </div>
         `;
@@ -668,28 +680,29 @@ function render(){
             成功率：${m.rate.toFixed(1)}%<br>
             平均利益（1回）：${Math.round(m.avgProfit).toLocaleString()}円<br>
             <span class="strong">期待値（1訪問あたり）：${Math.round(m.expected).toLocaleString()}円</span><br>
+            1商品あたり利益：${Math.round(m.profitPerItem).toLocaleString()}円<br>
             距離：${distText} / ルートスコア：${scoreText}
           </div>
 
           <div class="grid" style="margin-top:10px;">
-            <button class="smallbtn" onclick="visit(${idx})">訪問＋</button>
-            <button class="smallbtn danger" onclick="visitMinus(${idx})">訪問−</button>
+            <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
+            <button class="smallbtn danger" onclick="visitMinus(${i})">訪問−</button>
 
-            <button class="smallbtn" onclick="boughtPlus(${idx})">成功＋（カテゴリ選択）</button>
-            <button class="smallbtn danger" onclick="boughtMinus(${idx})">成功−</button>
+            <button class="smallbtn" onclick="boughtPlus(${i})">成功＋（カテゴリ選択）</button>
+            <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
 
-            <button class="smallbtn" onclick="itemsPlus(${idx})">個数＋（カテゴリ選択）</button>
-            <button class="smallbtn danger" onclick="itemsMinus(${idx})">個数−（カテゴリ選択）</button>
+            <button class="smallbtn" onclick="itemsPlus(${i})">個数＋（カテゴリ選択）</button>
+            <button class="smallbtn danger" onclick="itemsMinus(${i})">個数−（カテゴリ選択）</button>
 
-            <button class="smallbtn" onclick="profitPlus(${idx})">利益＋</button>
-            <button class="smallbtn danger" onclick="profitMinus(${idx})">利益−</button>
+            <button class="smallbtn" onclick="profitPlus(${i})">利益＋</button>
+            <button class="smallbtn danger" onclick="profitMinus(${i})">利益−</button>
 
-            <button class="smallbtn neutral" onclick="editStore(${idx})">設定（カテゴリも）</button>
-            <button class="smallbtn danger" onclick="deleteStore(${idx})">削除</button>
+            <button class="smallbtn neutral" onclick="editStore(${i})">設定（クイック最大12）</button>
+            <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
           </div>
 
           <div class="gray" style="margin-top:8px;">
-            ※ カテゴリはボタン選択（無ければ追加）→ 内訳が自動集計されます
+            ※ カテゴリボタン最大24（クイック最大12）
           </div>
         </div>
       `;
@@ -701,7 +714,7 @@ function render(){
   }
 }
 
-// XSS対策
+/** ===== XSS対策 ===== */
 function escapeHtml(str){
   return String(str)
     .replaceAll("&","&amp;")
