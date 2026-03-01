@@ -14,6 +14,7 @@
   .meta{line-height:1.6;}
   .strong{font-weight:700;}
   .danger{background:#ff3b30;}
+  .neutral{background:#34c759;}
   .gray{color:#666;font-size:14px;}
   .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2f7;color:#334;font-size:12px;margin-left:6px;}
   .section{margin-top:14px;}
@@ -45,10 +46,10 @@
 <script>
 let stores = JSON.parse(localStorage.getItem("stores")) || [];
 
-// 互換性：古いデータ補完（pref/profitが無い場合）
+// 互換性：古いデータ補完
 stores = stores.map(s => ({
   name: s.name ?? "店舗",
-  pref: (s.pref ?? "").trim(),           // 都道府県
+  pref: (s.pref ?? "").trim(),
   visits: Number(s.visits ?? 0),
   buyDays: Number(s.buyDays ?? 0),
   items: Number(s.items ?? 0),
@@ -56,10 +57,7 @@ stores = stores.map(s => ({
 }));
 
 function clampNonNeg(n){ return Math.max(0, Number(n) || 0); }
-
-function save(){
-  localStorage.setItem("stores", JSON.stringify(stores));
-}
+function save(){ localStorage.setItem("stores", JSON.stringify(stores)); }
 
 function addStore(){
   const name = document.getElementById("storeName").value.trim();
@@ -82,7 +80,7 @@ function resetFilter(){
 function visit(i){ stores[i].visits++; save(); render(); }
 function visitMinus(i){
   stores[i].visits = clampNonNeg(stores[i].visits - 1);
-  if(stores[i].buyDays > stores[i].visits) stores[i].buyDays = stores[i].visits; // 整合性
+  if(stores[i].buyDays > stores[i].visits) stores[i].buyDays = stores[i].visits;
   save(); render();
 }
 
@@ -130,6 +128,35 @@ function profitMinus(i){
   save(); render();
 }
 
+/** NEW: 店舗の設定（名前/都道府県編集） */
+function editStore(i){
+  const currentName = stores[i].name || "";
+  const currentPref = (stores[i].pref || "").trim();
+
+  const newName = prompt("店舗名を修正（空欄でキャンセル）", currentName);
+  if(newName === null) return;
+  const nameTrim = String(newName).trim();
+  if(!nameTrim) return;
+
+  const newPref = prompt("都道府県を修正（空欄OK）", currentPref);
+  if(newPref === null) return;
+
+  stores[i].name = nameTrim;
+  stores[i].pref = String(newPref).trim();
+
+  save(); render();
+}
+
+/** NEW: 店舗削除 */
+function deleteStore(i){
+  const s = stores[i];
+  const ok = confirm(`「${s.name}」を削除しますか？\n（データは戻せません）`);
+  if(!ok) return;
+
+  stores.splice(i,1);
+  save(); render();
+}
+
 // --- 期待値など計算 ---
 function calcMetrics(s){
   const visits = clampNonNeg(s.visits);
@@ -137,15 +164,15 @@ function calcMetrics(s){
   const items = clampNonNeg(s.items);
   const profit = clampNonNeg(s.profit);
 
-  const rate = visits > 0 ? (success / visits) * 100 : 0;  // %
+  const rate = visits > 0 ? (success / visits) * 100 : 0;
   const avgProfit = success > 0 ? (profit / success) : 0;
-  const expected = (rate/100) * avgProfit;                 // 期待値
+  const expected = (rate/100) * avgProfit;
   const profitPerItem = items > 0 ? (profit / items) : 0;
 
   return {visits, success, items, profit, rate, avgProfit, expected, profitPerItem};
 }
 
-// --- 都道府県リスト作成 ---
+// --- 都道府県リスト ---
 function buildPrefFilter(){
   const prefSet = new Set();
   stores.forEach(s => { if((s.pref||"").trim()) prefSet.add(s.pref.trim()); });
@@ -160,23 +187,27 @@ function buildPrefFilter(){
     sel.innerHTML += `<option value="${escapeHtmlAttr(p)}">${escapeHtml(p)}</option>`;
   });
 
-  // できれば選択状態維持
   if(Array.from(sel.options).some(o=>o.value===current)) sel.value = current;
   else sel.value = "__ALL__";
 }
 
-// --- レンダリング ---
+function avgExpected(arr){
+  if(!arr || arr.length===0) return 0;
+  let sum = 0;
+  arr.forEach(s => sum += calcMetrics(s).expected);
+  return sum / arr.length;
+}
+
+// --- 描画 ---
 function render(){
   buildPrefFilter();
   const filter = document.getElementById("prefFilter").value;
 
-  // 表示対象を抽出
   let viewStores = stores.slice();
   if(filter !== "__ALL__"){
     viewStores = viewStores.filter(s => (s.pref||"").trim() === filter);
   }
 
-  // 都道府県ごとにグループ化（フィルタがALLのとき）
   const grouped = new Map();
   if(filter === "__ALL__"){
     viewStores.forEach(s=>{
@@ -188,8 +219,6 @@ function render(){
     grouped.set(filter, viewStores);
   }
 
-  // 各グループ内で期待値順にソート（降順）
-  // 同期待値なら「成功率→平均利益→訪問数」の順で安定化
   for(const [k, arr] of grouped.entries()){
     arr.sort((a,b)=>{
       const A = calcMetrics(a), B = calcMetrics(b);
@@ -200,17 +229,11 @@ function render(){
     });
   }
 
-  // 都道府県（グループ）の並びも、グループ平均期待値でソート（ALLのとき）
   let groupKeys = Array.from(grouped.keys());
   if(filter === "__ALL__"){
-    groupKeys.sort((k1,k2)=>{
-      const avg1 = avgExpected(grouped.get(k1));
-      const avg2 = avgExpected(grouped.get(k2));
-      return avg2 - avg1;
-    });
+    groupKeys.sort((k1,k2)=> avgExpected(grouped.get(k2)) - avgExpected(grouped.get(k1)));
   }
 
-  // 出力
   const list = document.getElementById("storeList");
   list.innerHTML = "";
 
@@ -228,14 +251,16 @@ function render(){
     `;
 
     arr.forEach((s)=>{
-      const i = stores.indexOf(s); // 元配列のindex（参照のままなのでOK）
+      const i = stores.indexOf(s);
       const m = calcMetrics(s);
 
       list.innerHTML += `
         <div class="store">
-          <div class="strong">${escapeHtml(s.name)}
+          <div class="strong">
+            ${escapeHtml(s.name)}
             <span class="badge">${escapeHtml((s.pref||"").trim() || "未設定")}</span>
           </div>
+
           <div class="meta">
             訪問回数：${m.visits}回<br>
             成功回数：${m.success}回<br>
@@ -259,6 +284,9 @@ function render(){
 
             <button class="smallbtn" onclick="profitPlus(${i})">利益＋</button>
             <button class="smallbtn danger" onclick="profitMinus(${i})">利益−</button>
+
+            <button class="smallbtn neutral" onclick="editStore(${i})">設定（名前/都道府県）</button>
+            <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
           </div>
 
           <div class="gray" style="margin-top:8px;">
@@ -270,14 +298,7 @@ function render(){
   });
 }
 
-function avgExpected(arr){
-  if(!arr || arr.length===0) return 0;
-  let sum = 0;
-  arr.forEach(s => sum += calcMetrics(s).expected);
-  return sum / arr.length;
-}
-
-// XSS対策（念のため）
+// XSS対策
 function escapeHtml(str){
   return String(str)
     .replaceAll("&","&amp;")
@@ -287,7 +308,6 @@ function escapeHtml(str){
     .replaceAll("'","&#039;");
 }
 function escapeHtmlAttr(str){
-  // option value用（簡易）
   return escapeHtml(str).replaceAll("`","&#096;");
 }
 
