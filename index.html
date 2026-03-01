@@ -17,10 +17,15 @@
   .neutral{background:#34c759;}
   .gray{color:#666;font-size:14px;}
   .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2f7;color:#334;font-size:12px;margin-left:6px;}
-  .section{margin-top:14px;}
   .sectionTitle{font-weight:700;color:#223;margin-top:18px;}
   .row2{display:flex;gap:8px;}
   .row2 > *{flex:1;}
+  .toolbar{background:#fff;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-top:12px;}
+  .seg{display:flex;gap:8px;}
+  .seg button{width:auto;flex:1;background:#e9eef6;color:#123;}
+  .seg button.active{background:#007aff;color:#fff;}
+  .kv{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+  .pill{background:#f0f3f8;border-radius:999px;padding:6px 10px;font-size:13px;}
 </style>
 </head>
 <body>
@@ -33,18 +38,27 @@
 </div>
 <button onclick="addStore()">店舗追加</button>
 
-<div class="section">
+<div class="toolbar">
   <div class="row2">
+    <input id="q" placeholder="🔎 店舗検索（店舗名/都道府県）" oninput="render()">
     <select id="prefFilter" onchange="render()"></select>
-    <button onclick="resetFilter()">全て表示</button>
   </div>
-  <div class="gray">※表示は「都道府県ごと」に、各都道府県内で「期待値順（高い順）」に自動並び替えします。</div>
+
+  <div class="seg" style="margin-top:8px;">
+    <button id="layoutDetail" onclick="setLayout('detail')">詳細</button>
+    <button id="layoutCompact" onclick="setLayout('compact')">コンパクト</button>
+  </div>
+
+  <div class="gray" style="margin-top:8px;">
+    ※ 都道府県ごと表示＋各都道府県内は期待値順（高い順）。検索中は検索結果のみ表示。
+  </div>
 </div>
 
 <div id="storeList"></div>
 
 <script>
 let stores = JSON.parse(localStorage.getItem("stores")) || [];
+let layout = localStorage.getItem("layout") || "detail";
 
 // 互換性：古いデータ補完
 stores = stores.map(s => ({
@@ -59,22 +73,20 @@ stores = stores.map(s => ({
 function clampNonNeg(n){ return Math.max(0, Number(n) || 0); }
 function save(){ localStorage.setItem("stores", JSON.stringify(stores)); }
 
+function setLayout(v){
+  layout = v;
+  localStorage.setItem("layout", layout);
+  render();
+}
+
 function addStore(){
   const name = document.getElementById("storeName").value.trim();
   const pref = document.getElementById("prefName").value.trim();
   if(!name) return;
-
   stores.push({name, pref, visits:0, buyDays:0, items:0, profit:0});
-
   document.getElementById("storeName").value="";
   document.getElementById("prefName").value="";
-  save();
-  render();
-}
-
-function resetFilter(){
-  document.getElementById("prefFilter").value="__ALL__";
-  render();
+  save(); render();
 }
 
 function visit(i){ stores[i].visits++; save(); render(); }
@@ -128,7 +140,6 @@ function profitMinus(i){
   save(); render();
 }
 
-/** NEW: 店舗の設定（名前/都道府県編集） */
 function editStore(i){
   const currentName = stores[i].name || "";
   const currentPref = (stores[i].pref || "").trim();
@@ -147,17 +158,15 @@ function editStore(i){
   save(); render();
 }
 
-/** NEW: 店舗削除 */
 function deleteStore(i){
   const s = stores[i];
   const ok = confirm(`「${s.name}」を削除しますか？\n（データは戻せません）`);
   if(!ok) return;
-
   stores.splice(i,1);
   save(); render();
 }
 
-// --- 期待値など計算 ---
+// 指標計算
 function calcMetrics(s){
   const visits = clampNonNeg(s.visits);
   const success = clampNonNeg(s.buyDays);
@@ -172,7 +181,7 @@ function calcMetrics(s){
   return {visits, success, items, profit, rate, avgProfit, expected, profitPerItem};
 }
 
-// --- 都道府県リスト ---
+// 都道府県フィルタの候補
 function buildPrefFilter(){
   const prefSet = new Set();
   stores.forEach(s => { if((s.pref||"").trim()) prefSet.add(s.pref.trim()); });
@@ -188,7 +197,7 @@ function buildPrefFilter(){
   });
 
   if(Array.from(sel.options).some(o=>o.value===current)) sel.value = current;
-  else sel.value = "__ALL__";
+  else sel.value="__ALL__";
 }
 
 function avgExpected(arr){
@@ -198,18 +207,41 @@ function avgExpected(arr){
   return sum / arr.length;
 }
 
-// --- 描画 ---
+// 検索判定
+function matchesQuery(s, q){
+  if(!q) return true;
+  const t = (s.name + " " + (s.pref||"")).toLowerCase();
+  return t.includes(q.toLowerCase());
+}
+
 function render(){
   buildPrefFilter();
-  const filter = document.getElementById("prefFilter").value;
 
+  // レイアウトボタン反映
+  document.getElementById("layoutDetail").classList.toggle("active", layout==="detail");
+  document.getElementById("layoutCompact").classList.toggle("active", layout==="compact");
+
+  const filter = document.getElementById("prefFilter").value;
+  const q = (document.getElementById("q").value || "").trim();
+
+  // 表示対象
   let viewStores = stores.slice();
-  if(filter !== "__ALL__"){
-    viewStores = viewStores.filter(s => (s.pref||"").trim() === filter);
+
+  // 検索があれば検索優先（都道府県ごと表示は一旦やめて検索結果だけ）
+  if(q){
+    viewStores = viewStores.filter(s => matchesQuery(s, q));
+  } else {
+    // 検索してない時だけ都道府県フィルタを適用
+    if(filter !== "__ALL__"){
+      viewStores = viewStores.filter(s => (s.pref||"").trim() === filter);
+    }
   }
 
+  // グループ化
   const grouped = new Map();
-  if(filter === "__ALL__"){
+  if(q){
+    grouped.set("検索結果", viewStores);
+  } else if(filter === "__ALL__"){
     viewStores.forEach(s=>{
       const key = (s.pref||"").trim() || "（未設定）";
       if(!grouped.has(key)) grouped.set(key, []);
@@ -219,6 +251,7 @@ function render(){
     grouped.set(filter, viewStores);
   }
 
+  // グループ内を期待値順にソート
   for(const [k, arr] of grouped.entries()){
     arr.sort((a,b)=>{
       const A = calcMetrics(a), B = calcMetrics(b);
@@ -229,8 +262,9 @@ function render(){
     });
   }
 
+  // 都道府県グループの順（ALL時のみ）
   let groupKeys = Array.from(grouped.keys());
-  if(filter === "__ALL__"){
+  if(!q && filter === "__ALL__"){
     groupKeys.sort((k1,k2)=> avgExpected(grouped.get(k2)) - avgExpected(grouped.get(k1)));
   }
 
@@ -243,10 +277,11 @@ function render(){
 
     const groupAvg = avgExpected(arr);
 
+    // 見出し
     list.innerHTML += `
       <div class="sectionTitle">
         ${escapeHtml(prefKey)}
-        <span class="badge">平均期待値 ${Math.round(groupAvg).toLocaleString()}円</span>
+        ${q ? "" : `<span class="badge">平均期待値 ${Math.round(groupAvg).toLocaleString()}円</span>`}
       </div>
     `;
 
@@ -254,6 +289,40 @@ function render(){
       const i = stores.indexOf(s);
       const m = calcMetrics(s);
 
+      if(layout === "compact"){
+        list.innerHTML += `
+          <div class="store">
+            <div class="strong">
+              ${escapeHtml(s.name)}
+              <span class="badge">${escapeHtml((s.pref||"").trim() || "未設定")}</span>
+            </div>
+
+            <div class="kv">
+              <div class="pill"><b>期待値</b> ${Math.round(m.expected).toLocaleString()}円</div>
+              <div class="pill"><b>成功率</b> ${m.rate.toFixed(1)}%</div>
+              <div class="pill"><b>訪問</b> ${m.visits}</div>
+              <div class="pill"><b>成功</b> ${m.success}</div>
+              <div class="pill"><b>利益</b> ${m.profit.toLocaleString()}円</div>
+            </div>
+
+            <div class="grid" style="margin-top:10px;">
+              <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
+              <button class="smallbtn danger" onclick="visitMinus(${i})">訪問−</button>
+
+              <button class="smallbtn" onclick="boughtPlus(${i})">成功＋</button>
+              <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
+
+              <button class="smallbtn neutral" onclick="editStore(${i})">設定</button>
+              <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
+            </div>
+
+            <div class="gray" style="margin-top:8px;">※ コンパクト表示（詳細は「詳細」へ）</div>
+          </div>
+        `;
+        return;
+      }
+
+      // detail
       list.innerHTML += `
         <div class="store">
           <div class="strong">
@@ -296,6 +365,11 @@ function render(){
       `;
     });
   });
+
+  // 何もないとき
+  if(document.getElementById("storeList").innerHTML.trim() === ""){
+    list.innerHTML = `<div class="gray" style="margin-top:14px;">該当する店舗がありません。</div>`;
+  }
 }
 
 // XSS対策
