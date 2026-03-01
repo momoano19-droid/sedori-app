@@ -6,32 +6,49 @@
 <style>
   body{font-family:-apple-system;padding:20px;background:#f4f6f8;}
   h1{font-size:20px;margin:0 0 10px 0;}
-  input,button{padding:10px;margin:6px 0;width:100%;font-size:16px;}
+  input,select,button{padding:10px;margin:6px 0;width:100%;font-size:16px;}
   button{background:#007aff;color:white;border:none;border-radius:10px;}
   .grid{display:flex;gap:8px;flex-wrap:wrap;}
-  .smallbtn{flex:1 1 calc(50% - 8px); }
+  .smallbtn{flex:1 1 calc(50% - 8px);}
   .store{background:#fff;padding:12px;margin-top:12px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
   .meta{line-height:1.6;}
   .strong{font-weight:700;}
   .danger{background:#ff3b30;}
   .gray{color:#666;font-size:14px;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2f7;color:#334;font-size:12px;margin-left:6px;}
+  .section{margin-top:14px;}
+  .sectionTitle{font-weight:700;color:#223;margin-top:18px;}
+  .row2{display:flex;gap:8px;}
+  .row2 > *{flex:1;}
 </style>
 </head>
 <body>
 
 <h1>せどりGPS管理PRO</h1>
 
-<input id="storeName" placeholder="店舗名を入力">
+<div class="row2">
+  <input id="storeName" placeholder="店舗名を入力">
+  <input id="prefName" placeholder="都道府県（例：茨城県）">
+</div>
 <button onclick="addStore()">店舗追加</button>
+
+<div class="section">
+  <div class="row2">
+    <select id="prefFilter" onchange="render()"></select>
+    <button onclick="resetFilter()">全て表示</button>
+  </div>
+  <div class="gray">※表示は「都道府県ごと」に、各都道府県内で「期待値順（高い順）」に自動並び替えします。</div>
+</div>
 
 <div id="storeList"></div>
 
 <script>
 let stores = JSON.parse(localStorage.getItem("stores")) || [];
 
-/** 互換性：古いデータにprofitが無い場合の補完 */
+// 互換性：古いデータ補完（pref/profitが無い場合）
 stores = stores.map(s => ({
   name: s.name ?? "店舗",
+  pref: (s.pref ?? "").trim(),           // 都道府県
   visits: Number(s.visits ?? 0),
   buyDays: Number(s.buyDays ?? 0),
   items: Number(s.items ?? 0),
@@ -46,23 +63,32 @@ function save(){
 
 function addStore(){
   const name = document.getElementById("storeName").value.trim();
+  const pref = document.getElementById("prefName").value.trim();
   if(!name) return;
-  stores.push({name, visits:0, buyDays:0, items:0, profit:0});
+
+  stores.push({name, pref, visits:0, buyDays:0, items:0, profit:0});
+
   document.getElementById("storeName").value="";
-  save(); render();
+  document.getElementById("prefName").value="";
+  save();
+  render();
+}
+
+function resetFilter(){
+  document.getElementById("prefFilter").value="__ALL__";
+  render();
 }
 
 function visit(i){ stores[i].visits++; save(); render(); }
 function visitMinus(i){
   stores[i].visits = clampNonNeg(stores[i].visits - 1);
-  // 整合性：成功日が訪問を超えないようにする（任意だけど実用上おすすめ）
-  if(stores[i].buyDays > stores[i].visits) stores[i].buyDays = stores[i].visits;
+  if(stores[i].buyDays > stores[i].visits) stores[i].buyDays = stores[i].visits; // 整合性
   save(); render();
 }
 
 function boughtPlus(i){
   stores[i].buyDays++;
-  if(stores[i].buyDays > stores[i].visits) stores[i].visits = stores[i].buyDays; // 成功が入ったら訪問も最低限合わせる
+  if(stores[i].buyDays > stores[i].visits) stores[i].visits = stores[i].buyDays;
   const num = prompt("今回の仕入れ個数は？（数字）", "1");
   if(num !== null && String(num).trim() !== ""){
     stores[i].items += clampNonNeg(parseInt(num,10));
@@ -104,58 +130,154 @@ function profitMinus(i){
   save(); render();
 }
 
+// --- 期待値など計算 ---
+function calcMetrics(s){
+  const visits = clampNonNeg(s.visits);
+  const success = clampNonNeg(s.buyDays);
+  const items = clampNonNeg(s.items);
+  const profit = clampNonNeg(s.profit);
+
+  const rate = visits > 0 ? (success / visits) * 100 : 0;  // %
+  const avgProfit = success > 0 ? (profit / success) : 0;
+  const expected = (rate/100) * avgProfit;                 // 期待値
+  const profitPerItem = items > 0 ? (profit / items) : 0;
+
+  return {visits, success, items, profit, rate, avgProfit, expected, profitPerItem};
+}
+
+// --- 都道府県リスト作成 ---
+function buildPrefFilter(){
+  const prefSet = new Set();
+  stores.forEach(s => { if((s.pref||"").trim()) prefSet.add(s.pref.trim()); });
+
+  const prefs = Array.from(prefSet).sort((a,b)=>a.localeCompare(b,'ja'));
+  const sel = document.getElementById("prefFilter");
+  const current = sel.value || "__ALL__";
+
+  sel.innerHTML = "";
+  sel.innerHTML += `<option value="__ALL__">全て（都道府県ごと表示）</option>`;
+  prefs.forEach(p=>{
+    sel.innerHTML += `<option value="${escapeHtmlAttr(p)}">${escapeHtml(p)}</option>`;
+  });
+
+  // できれば選択状態維持
+  if(Array.from(sel.options).some(o=>o.value===current)) sel.value = current;
+  else sel.value = "__ALL__";
+}
+
+// --- レンダリング ---
 function render(){
+  buildPrefFilter();
+  const filter = document.getElementById("prefFilter").value;
+
+  // 表示対象を抽出
+  let viewStores = stores.slice();
+  if(filter !== "__ALL__"){
+    viewStores = viewStores.filter(s => (s.pref||"").trim() === filter);
+  }
+
+  // 都道府県ごとにグループ化（フィルタがALLのとき）
+  const grouped = new Map();
+  if(filter === "__ALL__"){
+    viewStores.forEach(s=>{
+      const key = (s.pref||"").trim() || "（未設定）";
+      if(!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(s);
+    });
+  } else {
+    grouped.set(filter, viewStores);
+  }
+
+  // 各グループ内で期待値順にソート（降順）
+  // 同期待値なら「成功率→平均利益→訪問数」の順で安定化
+  for(const [k, arr] of grouped.entries()){
+    arr.sort((a,b)=>{
+      const A = calcMetrics(a), B = calcMetrics(b);
+      if(B.expected !== A.expected) return B.expected - A.expected;
+      if(B.rate !== A.rate) return B.rate - A.rate;
+      if(B.avgProfit !== A.avgProfit) return B.avgProfit - A.avgProfit;
+      return B.visits - A.visits;
+    });
+  }
+
+  // 都道府県（グループ）の並びも、グループ平均期待値でソート（ALLのとき）
+  let groupKeys = Array.from(grouped.keys());
+  if(filter === "__ALL__"){
+    groupKeys.sort((k1,k2)=>{
+      const avg1 = avgExpected(grouped.get(k1));
+      const avg2 = avgExpected(grouped.get(k2));
+      return avg2 - avg1;
+    });
+  }
+
+  // 出力
   const list = document.getElementById("storeList");
   list.innerHTML = "";
 
-  stores.forEach((s,i)=>{
-    const visits = clampNonNeg(s.visits);
-    const success = clampNonNeg(s.buyDays);
-    const items = clampNonNeg(s.items);
-    const profit = clampNonNeg(s.profit);
+  groupKeys.forEach(prefKey=>{
+    const arr = grouped.get(prefKey) || [];
+    if(arr.length===0) return;
 
-    const rate = visits > 0 ? (success / visits) * 100 : 0;                 // 成功率%
-    const avgProfit = success > 0 ? (profit / success) : 0;                 // 1回あたり平均利益
-    const expected = (rate/100) * avgProfit;                                // 期待値
-    const profitPerItem = items > 0 ? (profit / items) : 0;                 // 1商品あたり利益
+    const groupAvg = avgExpected(arr);
 
     list.innerHTML += `
-      <div class="store">
-        <div class="strong">${escapeHtml(s.name)}</div>
-        <div class="meta">
-          訪問回数：${visits}回<br>
-          成功回数：${success}回（=仕入れできた日）<br>
-          総仕入れ個数：${items}個<br>
-          合計利益：${profit.toLocaleString()}円<br>
-          成功率：${rate.toFixed(1)}%<br>
-          平均利益（1回）：${Math.round(avgProfit).toLocaleString()}円<br>
-          <span class="strong">期待値（1訪問あたり）：${Math.round(expected).toLocaleString()}円</span><br>
-          1商品あたり利益：${Math.round(profitPerItem).toLocaleString()}円
-        </div>
-
-        <div class="grid" style="margin-top:10px;">
-          <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
-          <button class="smallbtn danger" onclick="visitMinus(${i})">訪問−</button>
-
-          <button class="smallbtn" onclick="boughtPlus(${i})">成功＋（個数入力あり）</button>
-          <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
-
-          <button class="smallbtn" onclick="itemsPlus(${i})">個数＋</button>
-          <button class="smallbtn danger" onclick="itemsMinus(${i})">個数−</button>
-
-          <button class="smallbtn" onclick="profitPlus(${i})">利益＋</button>
-          <button class="smallbtn danger" onclick="profitMinus(${i})">利益−</button>
-        </div>
-
-        <div class="gray" style="margin-top:8px;">
-          ※「成功＋」は成功回数を増やし、ついでに個数を入力できます。
-        </div>
+      <div class="sectionTitle">
+        ${escapeHtml(prefKey)}
+        <span class="badge">平均期待値 ${Math.round(groupAvg).toLocaleString()}円</span>
       </div>
     `;
+
+    arr.forEach((s)=>{
+      const i = stores.indexOf(s); // 元配列のindex（参照のままなのでOK）
+      const m = calcMetrics(s);
+
+      list.innerHTML += `
+        <div class="store">
+          <div class="strong">${escapeHtml(s.name)}
+            <span class="badge">${escapeHtml((s.pref||"").trim() || "未設定")}</span>
+          </div>
+          <div class="meta">
+            訪問回数：${m.visits}回<br>
+            成功回数：${m.success}回<br>
+            総仕入れ個数：${m.items}個<br>
+            合計利益：${m.profit.toLocaleString()}円<br>
+            成功率：${m.rate.toFixed(1)}%<br>
+            平均利益（1回）：${Math.round(m.avgProfit).toLocaleString()}円<br>
+            <span class="strong">期待値（1訪問あたり）：${Math.round(m.expected).toLocaleString()}円</span><br>
+            1商品あたり利益：${Math.round(m.profitPerItem).toLocaleString()}円
+          </div>
+
+          <div class="grid" style="margin-top:10px;">
+            <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
+            <button class="smallbtn danger" onclick="visitMinus(${i})">訪問−</button>
+
+            <button class="smallbtn" onclick="boughtPlus(${i})">成功＋（個数入力あり）</button>
+            <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
+
+            <button class="smallbtn" onclick="itemsPlus(${i})">個数＋</button>
+            <button class="smallbtn danger" onclick="itemsMinus(${i})">個数−</button>
+
+            <button class="smallbtn" onclick="profitPlus(${i})">利益＋</button>
+            <button class="smallbtn danger" onclick="profitMinus(${i})">利益−</button>
+          </div>
+
+          <div class="gray" style="margin-top:8px;">
+            ※ 期待値＝成功率×平均利益（1訪問あたりの目安）
+          </div>
+        </div>
+      `;
+    });
   });
 }
 
-/** XSS対策（念のため） */
+function avgExpected(arr){
+  if(!arr || arr.length===0) return 0;
+  let sum = 0;
+  arr.forEach(s => sum += calcMetrics(s).expected);
+  return sum / arr.length;
+}
+
+// XSS対策（念のため）
 function escapeHtml(str){
   return String(str)
     .replaceAll("&","&amp;")
@@ -163,6 +285,10 @@ function escapeHtml(str){
     .replaceAll(">","&gt;")
     .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
+}
+function escapeHtmlAttr(str){
+  // option value用（簡易）
+  return escapeHtml(str).replaceAll("`","&#096;");
 }
 
 render();
