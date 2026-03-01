@@ -26,6 +26,21 @@
   .seg button.active{background:#007aff;color:#fff;}
   .kv{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
   .pill{background:#f0f3f8;border-radius:999px;padding:6px 10px;font-size:13px;}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+  .chip{background:#eef2f7;color:#123;border-radius:999px;padding:8px 12px;font-size:14px;border:1px solid #dfe6f2;width:auto;}
+  .chip.primary{background:#007aff;color:#fff;border-color:#007aff;}
+  .chip.gray{background:#f0f3f8;color:#444;}
+  .chip.danger{background:#ff3b30;color:#fff;border-color:#ff3b30;}
+  /* modal */
+  .overlay{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.35);display:none;align-items:center;justify-content:center;padding:16px;z-index:9999;}
+  .modal{background:#fff;border-radius:14px;max-width:520px;width:100%;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,0.25);}
+  .modal h2{margin:0 0 6px 0;font-size:18px;}
+  .modal .small{color:#666;font-size:13px;margin:0 0 10px 0;line-height:1.4;}
+  .modal .row{display:flex;gap:8px;}
+  .modal .row > *{flex:1;}
+  .modal .actions{display:flex;gap:8px;margin-top:10px;}
+  .modal .actions button{flex:1;}
+  .modal button.secondary{background:#e9eef6;color:#123;}
 </style>
 </head>
 <body>
@@ -37,11 +52,12 @@
   <input id="prefName" placeholder="都道府県（例：茨城県）">
 </div>
 <input id="mapUrl" placeholder="GoogleマップURL（任意：共有→リンクをコピーして貼る）">
+<input id="defaultCategory" placeholder="デフォルトカテゴリ（例：本 / 家電）">
 <button onclick="addStore()">店舗追加</button>
 
 <div class="toolbar">
   <div class="row2">
-    <input id="q" placeholder="🔎 店舗検索（店舗名/都道府県）" oninput="render()">
+    <input id="q" placeholder="🔎 店舗検索（店舗名/都道府県/カテゴリ）" oninput="render()">
     <select id="prefFilter" onchange="render()"></select>
   </div>
 
@@ -69,18 +85,48 @@
   </div>
 
   <div class="gray" style="margin-top:8px;">
-    ※ 検索中は「検索結果だけ表示」。ルート最適化は「緯度経度を登録した店舗」だけ距離/スコアが出ます。
+    ※ 仕入れ個数を入れると「カテゴリ選択（ボタン）」が出ます。<br>
+    ※ ルート最適化は「URLから座標を登録した店舗」だけ距離/スコアが出ます。
   </div>
 </div>
 
 <div id="storeList"></div>
 
+<!-- カテゴリ選択モーダル -->
+<div id="overlay" class="overlay" onclick="overlayClick(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2 id="modalTitle">カテゴリ選択</h2>
+    <p id="modalHint" class="small"></p>
+
+    <div id="chipArea" class="chips"></div>
+
+    <div class="row" style="margin-top:10px;">
+      <input id="customCat" placeholder="その他：カテゴリを手入力">
+      <button class="secondary" onclick="addCustomCategory()">追加</button>
+    </div>
+
+    <div class="actions">
+      <button class="secondary" onclick="closeModal(false)">キャンセル</button>
+      <button onclick="closeModal(true)">確定</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let stores = JSON.parse(localStorage.getItem("stores")) || [];
 let layout = localStorage.getItem("layout") || "detail";
-let lastPos = null; // {lat,lng}
+let lastPos = null;
 
-// 互換性：古いデータ補完（lat/lng/urlが無い場合も対応）
+// modal state
+let modalState = {
+  open:false,
+  storeIndex:null,
+  deltaItems:0,
+  selectedCat:"",
+  pendingTotalAdjust:false
+};
+
+// 互換性補完
 stores = stores.map(s => ({
   name: s.name ?? "店舗",
   pref: (s.pref ?? "").trim(),
@@ -91,28 +137,23 @@ stores = stores.map(s => ({
   mapUrl: (s.mapUrl ?? "").trim(),
   lat: (typeof s.lat === "number") ? s.lat : null,
   lng: (typeof s.lng === "number") ? s.lng : null,
+  defaultCategory: (s.defaultCategory ?? "").trim(),
+  categoryCounts: (s.categoryCounts && typeof s.categoryCounts === "object") ? s.categoryCounts : {},
+  // NEW: よく使うカテゴリ（店ごとのショートカット）
+  quickCategories: Array.isArray(s.quickCategories) ? s.quickCategories.filter(Boolean) : []
 }));
 
 function clampNonNeg(n){ return Math.max(0, Number(n) || 0); }
 function save(){ localStorage.setItem("stores", JSON.stringify(stores)); }
 
-function setLayout(v){
-  layout = v;
-  localStorage.setItem("layout", layout);
-  render();
-}
+function setLayout(v){ layout=v; localStorage.setItem("layout",layout); render(); }
 
 function extractLatLng(url){
   if(!url) return null;
-
-  // 1) @lat,lng 形式
   let m = url.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
   if(m) return {lat: parseFloat(m[1]), lng: parseFloat(m[2])};
-
-  // 2) !3dlat!4dlng 形式
   m = url.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
   if(m) return {lat: parseFloat(m[1]), lng: parseFloat(m[2])};
-
   return null;
 }
 
@@ -120,27 +161,181 @@ function addStore(){
   const name = document.getElementById("storeName").value.trim();
   const pref = document.getElementById("prefName").value.trim();
   const mapUrl = document.getElementById("mapUrl").value.trim();
-
+  const defaultCategory = document.getElementById("defaultCategory").value.trim();
   if(!name) return;
 
-  let lat = null, lng = null;
+  let lat=null, lng=null;
   if(mapUrl){
     const c = extractLatLng(mapUrl);
-    if(!c){
-      alert("GoogleマップURLから座標が取れませんでした。\n店舗ページで「共有→リンクをコピー」して貼り直してみてください。");
-      return;
-    }
-    lat = c.lat; lng = c.lng;
+    if(!c){ alert("GoogleマップURLから座標が取れませんでした。\n「共有→リンクをコピー」したURLを貼ってください。"); return; }
+    lat=c.lat; lng=c.lng;
   }
 
-  stores.push({name, pref, visits:0, buyDays:0, items:0, profit:0, mapUrl, lat, lng});
+  stores.push({
+    name,pref,
+    visits:0,buyDays:0,items:0,profit:0,
+    mapUrl,lat,lng,
+    defaultCategory,
+    categoryCounts:{},
+    quickCategories: defaultCategory ? [defaultCategory] : []
+  });
 
   document.getElementById("storeName").value="";
   document.getElementById("prefName").value="";
   document.getElementById("mapUrl").value="";
+  document.getElementById("defaultCategory").value="";
   save(); render();
 }
 
+// --- カテゴリ集計 ---
+function addItemsToCategory(i, cat, delta){
+  const s = stores[i];
+  const category = String(cat||"").trim();
+  if(!category) return;
+  if(!s.categoryCounts || typeof s.categoryCounts !== "object") s.categoryCounts = {};
+  const cur = clampNonNeg(s.categoryCounts[category] ?? 0);
+  const next = clampNonNeg(cur + delta);
+  if(next === 0) delete s.categoryCounts[category];
+  else s.categoryCounts[category] = next;
+
+  // 候補に反映（店のクイックに追加 & 全体候補にも乗る）
+  if(!s.quickCategories) s.quickCategories = [];
+  if(!s.quickCategories.includes(category)){
+    s.quickCategories.unshift(category);
+    s.quickCategories = s.quickCategories.slice(0,6);
+  }
+  if(!s.defaultCategory) s.defaultCategory = category; // まだ未設定なら初回カテゴリをデフォに
+}
+
+function getAllCategories(){
+  const set = new Set();
+  stores.forEach(s=>{
+    const dc = (s.defaultCategory||"").trim();
+    if(dc) set.add(dc);
+    const qc = s.quickCategories || [];
+    qc.forEach(c=>{ if(String(c).trim()) set.add(String(c).trim()); });
+    const cc = s.categoryCounts || {};
+    Object.keys(cc).forEach(k=>{ if(k.trim()) set.add(k.trim()); });
+  });
+  return Array.from(set).sort((a,b)=>a.localeCompare(b,'ja'));
+}
+
+function categorySummary(s){
+  const cc = s.categoryCounts || {};
+  const keys = Object.keys(cc);
+  if(!keys.length) return "";
+  keys.sort((a,b)=>(cc[b]||0)-(cc[a]||0));
+  const top = keys.slice(0,3).map(k => `${k}:${cc[k]}`);
+  const more = keys.length > 3 ? ` +${keys.length-3}` : "";
+  return `（${top.join(" / ")}${more}）`;
+}
+
+// --- モーダル：カテゴリをボタンで選ぶ ---
+function openCategoryModal(storeIndex, deltaItems, title){
+  const s = stores[storeIndex];
+  modalState.open = true;
+  modalState.storeIndex = storeIndex;
+  modalState.deltaItems = deltaItems;
+  modalState.selectedCat = s.defaultCategory || "";
+
+  document.getElementById("modalTitle").textContent = title;
+  document.getElementById("modalHint").textContent =
+    `店舗：${s.name} / 個数：${deltaItems}　（ボタンで選択。無ければ下で追加）`;
+
+  document.getElementById("customCat").value = "";
+
+  rebuildChips();
+  document.getElementById("overlay").style.display = "flex";
+}
+
+function rebuildChips(){
+  const area = document.getElementById("chipArea");
+  area.innerHTML = "";
+
+  const s = stores[modalState.storeIndex];
+  const chips = [];
+
+  // 1) 店のクイック（最大6）
+  (s.quickCategories||[]).forEach(c=>{ if(String(c).trim()) chips.push(String(c).trim()); });
+
+  // 2) 追加で全体候補から補完（上位8）
+  const all = getAllCategories();
+  all.forEach(c=>{
+    if(chips.length >= 10) return;
+    if(!chips.includes(c)) chips.push(c);
+  });
+
+  // 3) デフォルトが候補に無い場合は入れる
+  if(modalState.selectedCat && !chips.includes(modalState.selectedCat)){
+    chips.unshift(modalState.selectedCat);
+  }
+
+  // チップ描画
+  chips.forEach(cat=>{
+    const btn = document.createElement("button");
+    btn.className = "chip" + (cat === modalState.selectedCat ? " primary" : "");
+    btn.type = "button";
+    btn.textContent = cat;
+    btn.onclick = () => {
+      modalState.selectedCat = cat;
+      rebuildChips();
+    };
+    area.appendChild(btn);
+  });
+
+  // 空欄カテゴリも許可（集計しない）
+  const noneBtn = document.createElement("button");
+  noneBtn.className = "chip gray" + (!modalState.selectedCat ? " primary" : "");
+  noneBtn.type="button";
+  noneBtn.textContent = "カテゴリなし";
+  noneBtn.onclick = () => {
+    modalState.selectedCat = "";
+    rebuildChips();
+  };
+  area.appendChild(noneBtn);
+}
+
+function addCustomCategory(){
+  const v = document.getElementById("customCat").value.trim();
+  if(!v) return;
+  modalState.selectedCat = v;
+
+  // いったん店のクイックに追加して、すぐボタンに出るように
+  const s = stores[modalState.storeIndex];
+  if(!s.quickCategories) s.quickCategories=[];
+  if(!s.quickCategories.includes(v)){
+    s.quickCategories.unshift(v);
+    s.quickCategories = s.quickCategories.slice(0,6);
+  }
+  rebuildChips();
+  document.getElementById("customCat").value = "";
+}
+
+function overlayClick(e){
+  // 背景クリックで閉じない（誤操作防止）
+}
+
+function closeModal(commit){
+  document.getElementById("overlay").style.display = "none";
+  modalState.open = false;
+
+  if(!commit) return;
+
+  const i = modalState.storeIndex;
+  const delta = modalState.deltaItems;
+  const cat = modalState.selectedCat;
+
+  // 個数反映（合計 & カテゴリ内訳）
+  if(delta !== 0){
+    stores[i].items = clampNonNeg(stores[i].items + delta);
+    addItemsToCategory(i, cat, delta);
+  }
+
+  save();
+  render();
+}
+
+// --- 操作 ---
 function visit(i){ stores[i].visits++; save(); render(); }
 function visitMinus(i){
   stores[i].visits = clampNonNeg(stores[i].visits - 1);
@@ -151,30 +346,30 @@ function visitMinus(i){
 function boughtPlus(i){
   stores[i].buyDays++;
   if(stores[i].buyDays > stores[i].visits) stores[i].visits = stores[i].buyDays;
-  const num = prompt("今回の仕入れ個数は？（数字）", "1");
-  if(num !== null && String(num).trim() !== ""){
-    stores[i].items += clampNonNeg(parseInt(num,10));
+
+  const numStr = prompt("今回の仕入れ個数は？（数字）", "1");
+  if(numStr !== null && String(numStr).trim() !== ""){
+    const n = clampNonNeg(parseInt(numStr,10));
+    openCategoryModal(i, n, "カテゴリ選択（成功＋）");
+  } else {
+    save(); render();
   }
-  save(); render();
 }
-function boughtMinus(i){
-  stores[i].buyDays = clampNonNeg(stores[i].buyDays - 1);
-  save(); render();
-}
+function boughtMinus(i){ stores[i].buyDays = clampNonNeg(stores[i].buyDays - 1); save(); render(); }
 
 function itemsPlus(i){
-  const num = prompt("追加する個数は？（数字）", "1");
-  if(num !== null && String(num).trim() !== ""){
-    stores[i].items += clampNonNeg(parseInt(num,10));
+  const numStr = prompt("追加する個数は？（数字）", "1");
+  if(numStr !== null && String(numStr).trim() !== ""){
+    const n = clampNonNeg(parseInt(numStr,10));
+    openCategoryModal(i, n, "カテゴリ選択（個数＋）");
   }
-  save(); render();
 }
 function itemsMinus(i){
-  const num = prompt("減らす個数は？（数字）", "1");
-  if(num !== null && String(num).trim() !== ""){
-    stores[i].items = clampNonNeg(stores[i].items - clampNonNeg(parseInt(num,10)));
+  const numStr = prompt("減らす個数は？（数字）", "1");
+  if(numStr !== null && String(numStr).trim() !== ""){
+    const n = clampNonNeg(parseInt(numStr,10));
+    openCategoryModal(i, -n, "カテゴリ選択（個数−）");
   }
-  save(); render();
 }
 
 function profitPlus(i){
@@ -192,39 +387,43 @@ function profitMinus(i){
   save(); render();
 }
 
-// 設定（名前/都道府県/GoogleマップURL）
+// 設定：現在値入りで編集（店のクイックカテゴリも編集）
 function editStore(i){
   const s = stores[i];
-  const newName = prompt("店舗名を修正（空欄でキャンセル）", s.name || "");
+
+  const newName = prompt("店舗名（現在値入り）", s.name || "");
   if(newName === null) return;
   const nameTrim = String(newName).trim();
   if(!nameTrim) return;
 
-  const newPref = prompt("都道府県を修正（空欄OK）", (s.pref||"").trim());
+  const newPref = prompt("都道府県（現在値入り・空欄OK）", (s.pref||"").trim());
   if(newPref === null) return;
 
-  const newUrl = prompt("GoogleマップURLを修正（空欄OK）", (s.mapUrl||"").trim());
+  const newUrl = prompt("GoogleマップURL（現在値入り・空欄OK）", (s.mapUrl||"").trim());
   if(newUrl === null) return;
 
-  let lat = s.lat, lng = s.lng;
+  const newDefaultCat = prompt("デフォルトカテゴリ（現在値入り・空欄OK）", (s.defaultCategory||"").trim());
+  if(newDefaultCat === null) return;
+
+  const newQuick = prompt("よく使うカテゴリ（/区切り、例：本/家電/ホビー）", (s.quickCategories||[]).join("/"));
+  if(newQuick === null) return;
+
+  let lat=s.lat,lng=s.lng;
   const urlTrim = String(newUrl).trim();
   if(urlTrim){
     const c = extractLatLng(urlTrim);
-    if(!c){
-      alert("URLから座標が取れませんでした。\n「共有→リンクをコピー」したURLを貼ってください。");
-      return;
-    }
-    lat = c.lat; lng = c.lng;
+    if(!c){ alert("URLから座標が取れませんでした。\n「共有→リンクをコピー」したURLを貼ってください。"); return; }
+    lat=c.lat; lng=c.lng;
   } else {
-    // URL空欄なら座標も外す（必要ならコメントアウトOK）
-    lat = null; lng = null;
+    lat=null; lng=null;
   }
 
-  stores[i].name = nameTrim;
-  stores[i].pref = String(newPref).trim();
-  stores[i].mapUrl = urlTrim;
-  stores[i].lat = lat;
-  stores[i].lng = lng;
+  s.name = nameTrim;
+  s.pref = String(newPref).trim();
+  s.mapUrl = urlTrim;
+  s.lat = lat; s.lng = lng;
+  s.defaultCategory = String(newDefaultCat).trim();
+  s.quickCategories = String(newQuick).split("/").map(x=>x.trim()).filter(Boolean).slice(0,6);
 
   save(); render();
 }
@@ -236,7 +435,7 @@ function deleteStore(i){
   save(); render();
 }
 
-// 指標計算
+// 指標
 function calcMetrics(s){
   const visits = clampNonNeg(s.visits);
   const success = clampNonNeg(s.buyDays);
@@ -251,9 +450,9 @@ function calcMetrics(s){
   return {visits, success, items, profit, rate, avgProfit, expected, profitPerItem};
 }
 
-// 距離計算（km）
+// 距離
 function distanceKm(lat1,lng1,lat2,lng2){
-  const R = 6371; // km
+  const R = 6371;
   const dLat = (lat2-lat1) * Math.PI/180;
   const dLng = (lng2-lng1) * Math.PI/180;
   const a =
@@ -264,34 +463,29 @@ function distanceKm(lat1,lng1,lat2,lng2){
   return R*c;
 }
 
-// ルート最適化（現在地取得→routeにする）
 function optimizeRoute(){
-  if(!navigator.geolocation){
-    alert("この端末では位置情報が使えません。");
-    return;
-  }
+  if(!navigator.geolocation){ alert("この端末では位置情報が使えません。"); return; }
   navigator.geolocation.getCurrentPosition(
     (pos)=>{
       lastPos = {lat: pos.coords.latitude, lng: pos.coords.longitude};
       document.getElementById("sortType").value = "route";
       render();
     },
-    (err)=>{
+    ()=>{
       alert("位置情報が取得できませんでした。\niPhone設定 > プライバシー > 位置情報サービス で許可を確認してください。");
     },
     {enableHighAccuracy:true, timeout:10000}
   );
 }
 
-// 都道府県フィルタ候補
+// フィルタ候補
 function buildPrefFilter(){
   const prefSet = new Set();
   stores.forEach(s => { if((s.pref||"").trim()) prefSet.add(s.pref.trim()); });
-
   const prefs = Array.from(prefSet).sort((a,b)=>a.localeCompare(b,'ja'));
+
   const sel = document.getElementById("prefFilter");
   const current = sel.value || "__ALL__";
-
   sel.innerHTML = "";
   sel.innerHTML += `<option value="__ALL__">全て（都道府県ごと表示）</option>`;
   prefs.forEach(p=>{
@@ -302,23 +496,17 @@ function buildPrefFilter(){
   else sel.value="__ALL__";
 }
 
-function avgExpected(arr){
-  if(!arr || arr.length===0) return 0;
-  let sum = 0;
-  arr.forEach(s => sum += calcMetrics(s).expected);
-  return sum / arr.length;
-}
-
 function matchesQuery(s, q){
   if(!q) return true;
-  const t = (s.name + " " + (s.pref||"")).toLowerCase();
+  const cats = Object.keys(s.categoryCounts || {}).join(" ");
+  const qcats = (s.quickCategories||[]).join(" ");
+  const t = (s.name + " " + (s.pref||"") + " " + (s.defaultCategory||"") + " " + qcats + " " + cats).toLowerCase();
   return t.includes(q.toLowerCase());
 }
 
 function render(){
   buildPrefFilter();
 
-  // layout button state
   document.getElementById("layoutDetail").classList.toggle("active", layout==="detail");
   document.getElementById("layoutCompact").classList.toggle("active", layout==="compact");
   document.getElementById("layoutList").classList.toggle("active", layout==="list");
@@ -329,29 +517,21 @@ function render(){
 
   const minExpected = clampNonNeg(parseFloat(document.getElementById("minExpected").value || "0"));
   const minRate = clampNonNeg(parseFloat(document.getElementById("minRate").value || "0"));
-
   const sortType = document.getElementById("sortType").value;
 
-  // build view items (metrics + distance/score)
   let view = stores.slice()
     .filter(s => matchesQuery(s, q))
-    .filter(s => {
-      const m = calcMetrics(s);
-      return m.expected >= minExpected && m.rate >= minRate;
-    })
     .map(s => {
       const m = calcMetrics(s);
-      let dist = null, score = null;
-
+      let dist=null, score=null;
       if(lastPos && typeof s.lat === "number" && typeof s.lng === "number"){
-        dist = distanceKm(lastPos.lat, lastPos.lng, s.lat, s.lng);
-        // 近すぎで割り算が暴れないように +0.2km
+        dist = distanceKm(lastPos.lat,lastPos.lng,s.lat,s.lng);
         score = m.expected / (dist + 0.2);
       }
       return {...s, _m:m, _dist:dist, _score:score};
-    });
+    })
+    .filter(s => s._m.expected >= minExpected && s._m.rate >= minRate);
 
-  // if not searching, apply pref filter
   if(!q && filter !== "__ALL__"){
     view = view.filter(s => (s.pref||"").trim() === filter);
   }
@@ -370,65 +550,42 @@ function render(){
     grouped.set(filter, view);
   }
 
-  // sort inside each group
   for(const [k, arr] of grouped.entries()){
     arr.sort((a,b)=>{
       if(sortType === "route"){
-        // scoreが無い（座標未登録）は後ろへ
         const as = (typeof a._score === "number") ? a._score : -Infinity;
         const bs = (typeof b._score === "number") ? b._score : -Infinity;
         if(bs !== as) return bs - as;
-
-        // fallback
         return b._m.expected - a._m.expected;
       }
-      if(sortType === "rate"){
-        if(b._m.rate !== a._m.rate) return b._m.rate - a._m.rate;
-      } else if(sortType === "avgProfit"){
-        if(b._m.avgProfit !== a._m.avgProfit) return b._m.avgProfit - a._m.avgProfit;
-      } else if(sortType === "visits"){
-        if(b._m.visits !== a._m.visits) return b._m.visits - a._m.visits;
-      } else {
-        if(b._m.expected !== a._m.expected) return b._m.expected - a._m.expected;
-      }
-      // tie-break
+      if(sortType === "rate") return b._m.rate - a._m.rate;
+      if(sortType === "avgProfit") return b._m.avgProfit - a._m.avgProfit;
+      if(sortType === "visits") return b._m.visits - a._m.visits;
       return b._m.expected - a._m.expected;
     });
-  }
-
-  // group order for ALL (optional)
-  let groupKeys = Array.from(grouped.keys());
-  if(!q && filter === "__ALL__"){
-    groupKeys.sort((k1,k2)=> avgExpected(grouped.get(k2).map(x=>({ ...x, ...x._m }))) - avgExpected(grouped.get(k1).map(x=>({ ...x, ...x._m }))));
   }
 
   const list = document.getElementById("storeList");
   list.innerHTML = "";
 
-  groupKeys.forEach(prefKey=>{
+  Array.from(grouped.keys()).forEach(prefKey=>{
     const arr = grouped.get(prefKey) || [];
     if(arr.length===0) return;
 
-    const groupAvg = avgExpected(arr.map(x=>({ expected: x._m.expected })));
-
-    list.innerHTML += `
-      <div class="sectionTitle">
-        ${escapeHtml(prefKey)}
-        ${q ? "" : `<span class="badge">平均期待値 ${Math.round(groupAvg).toLocaleString()}円</span>`}
-      </div>
-    `;
+    list.innerHTML += `<div class="sectionTitle">${escapeHtml(prefKey)}</div>`;
 
     arr.forEach(s=>{
-      const i = stores.indexOf(stores.find(x => x === s) || stores.find(x => x.name===s.name && x.pref===s.pref) || stores[0]);
+      const idx = stores.indexOf(stores.find(x=>x===s) || stores.find(x=>x.name===s.name && x.pref===s.pref) || stores[0]);
       const m = s._m;
       const distText = (typeof s._dist === "number") ? `${s._dist.toFixed(1)}km` : "—";
       const scoreText = (typeof s._score === "number") ? `${Math.round(s._score)} /km` : "—";
+      const catSum = categorySummary(s);
 
-      // common header
       const header = `
         <div class="strong">
           ${escapeHtml(s.name)}
           <span class="badge">${escapeHtml((s.pref||"").trim() || "未設定")}</span>
+          ${(s.defaultCategory||"").trim() ? `<span class="badge">カテゴリ:${escapeHtml(s.defaultCategory.trim())}</span>` : ""}
         </div>
       `;
 
@@ -440,10 +597,11 @@ function render(){
               <div class="pill"><b>期待値</b> ${Math.round(m.expected).toLocaleString()}円</div>
               <div class="pill"><b>距離</b> ${distText}</div>
               <div class="pill"><b>スコア</b> ${scoreText}</div>
+              <div class="pill"><b>個数</b> ${m.items}個${escapeHtml(catSum)}</div>
             </div>
             <div class="grid" style="margin-top:10px;">
-              <button class="smallbtn neutral" onclick="editStore(${i})">設定</button>
-              <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
+              <button class="smallbtn neutral" onclick="editStore(${idx})">設定</button>
+              <button class="smallbtn danger" onclick="deleteStore(${idx})">削除</button>
             </div>
           </div>
         `;
@@ -460,11 +618,12 @@ function render(){
               <div class="pill"><b>平均利益</b> ${Math.round(m.avgProfit).toLocaleString()}円</div>
               <div class="pill"><b>距離</b> ${distText}</div>
               <div class="pill"><b>スコア</b> ${scoreText}</div>
+              <div class="pill"><b>個数</b> ${m.items}個${escapeHtml(catSum)}</div>
             </div>
-            <div class="gray" style="margin-top:8px;">※ スコア＝期待値÷距離（近くて期待値高いほど上）</div>
+            <div class="gray" style="margin-top:8px;">※ スコア＝期待値÷距離</div>
             <div class="grid" style="margin-top:10px;">
-              <button class="smallbtn neutral" onclick="editStore(${i})">設定</button>
-              <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
+              <button class="smallbtn neutral" onclick="editStore(${idx})">設定</button>
+              <button class="smallbtn danger" onclick="deleteStore(${idx})">削除</button>
             </div>
           </div>
         `;
@@ -480,16 +639,17 @@ function render(){
               <div class="pill"><b>成功率</b> ${m.rate.toFixed(1)}%</div>
               <div class="pill"><b>距離</b> ${distText}</div>
               <div class="pill"><b>スコア</b> ${scoreText}</div>
-              <div class="pill"><b>訪問</b> ${m.visits}</div>
-              <div class="pill"><b>成功</b> ${m.success}</div>
+              <div class="pill"><b>個数</b> ${m.items}個${escapeHtml(catSum)}</div>
             </div>
             <div class="grid" style="margin-top:10px;">
-              <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
-              <button class="smallbtn danger" onclick="visitMinus(${i})">訪問−</button>
-              <button class="smallbtn" onclick="boughtPlus(${i})">成功＋</button>
-              <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
-              <button class="smallbtn neutral" onclick="editStore(${i})">設定</button>
-              <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
+              <button class="smallbtn" onclick="visit(${idx})">訪問＋</button>
+              <button class="smallbtn danger" onclick="visitMinus(${idx})">訪問−</button>
+              <button class="smallbtn" onclick="boughtPlus(${idx})">成功＋</button>
+              <button class="smallbtn danger" onclick="boughtMinus(${idx})">成功−</button>
+              <button class="smallbtn" onclick="itemsPlus(${idx})">個数＋</button>
+              <button class="smallbtn danger" onclick="itemsMinus(${idx})">個数−</button>
+              <button class="smallbtn neutral" onclick="editStore(${idx})">設定</button>
+              <button class="smallbtn danger" onclick="deleteStore(${idx})">削除</button>
             </div>
           </div>
         `;
@@ -503,34 +663,33 @@ function render(){
           <div class="meta">
             訪問回数：${m.visits}回<br>
             成功回数：${m.success}回<br>
-            総仕入れ個数：${m.items}個<br>
+            総仕入れ個数：${m.items}個 ${escapeHtml(catSum)}<br>
             合計利益：${m.profit.toLocaleString()}円<br>
             成功率：${m.rate.toFixed(1)}%<br>
             平均利益（1回）：${Math.round(m.avgProfit).toLocaleString()}円<br>
             <span class="strong">期待値（1訪問あたり）：${Math.round(m.expected).toLocaleString()}円</span><br>
-            1商品あたり利益：${Math.round(m.profitPerItem).toLocaleString()}円<br>
             距離：${distText} / ルートスコア：${scoreText}
           </div>
 
           <div class="grid" style="margin-top:10px;">
-            <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
-            <button class="smallbtn danger" onclick="visitMinus(${i})">訪問−</button>
+            <button class="smallbtn" onclick="visit(${idx})">訪問＋</button>
+            <button class="smallbtn danger" onclick="visitMinus(${idx})">訪問−</button>
 
-            <button class="smallbtn" onclick="boughtPlus(${i})">成功＋（個数入力あり）</button>
-            <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
+            <button class="smallbtn" onclick="boughtPlus(${idx})">成功＋（カテゴリ選択）</button>
+            <button class="smallbtn danger" onclick="boughtMinus(${idx})">成功−</button>
 
-            <button class="smallbtn" onclick="itemsPlus(${i})">個数＋</button>
-            <button class="smallbtn danger" onclick="itemsMinus(${i})">個数−</button>
+            <button class="smallbtn" onclick="itemsPlus(${idx})">個数＋（カテゴリ選択）</button>
+            <button class="smallbtn danger" onclick="itemsMinus(${idx})">個数−（カテゴリ選択）</button>
 
-            <button class="smallbtn" onclick="profitPlus(${i})">利益＋</button>
-            <button class="smallbtn danger" onclick="profitMinus(${i})">利益−</button>
+            <button class="smallbtn" onclick="profitPlus(${idx})">利益＋</button>
+            <button class="smallbtn danger" onclick="profitMinus(${idx})">利益−</button>
 
-            <button class="smallbtn neutral" onclick="editStore(${i})">設定（名前/都道府県/URL）</button>
-            <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
+            <button class="smallbtn neutral" onclick="editStore(${idx})">設定（カテゴリも）</button>
+            <button class="smallbtn danger" onclick="deleteStore(${idx})">削除</button>
           </div>
 
           <div class="gray" style="margin-top:8px;">
-            ※ 期待値＝成功率×平均利益 ／ スコア＝期待値÷距離
+            ※ カテゴリはボタン選択（無ければ追加）→ 内訳が自動集計されます
           </div>
         </div>
       `;
