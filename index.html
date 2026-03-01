@@ -4,35 +4,13 @@
 <meta charset="UTF-8">
 <title>せどりGPS管理PRO</title>
 <style>
-body{
-  font-family: -apple-system;
-  padding:20px;
-  background:#f4f6f8;
-}
+body{font-family:-apple-system;padding:20px;background:#f4f6f8;}
 h1{font-size:20px;}
-input,button{
-  padding:10px;
-  margin:5px 0;
-  width:100%;
-  font-size:16px;
-}
-button{
-  background:#007aff;
-  color:white;
-  border:none;
-  border-radius:8px;
-}
-.store{
-  background:white;
-  padding:10px;
-  margin-top:10px;
-  border-radius:10px;
-  box-shadow:0 2px 5px rgba(0,0,0,0.1);
-}
-.small{
-  font-size:14px;
-  color:gray;
-}
+input,button{padding:10px;margin:5px 0;width:100%;font-size:16px;}
+button{background:#007aff;color:white;border:none;border-radius:8px;}
+.smallbtn{width:48%;display:inline-block;}
+.store{background:white;padding:10px;margin-top:10px;border-radius:10px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
+.small{font-size:14px;color:gray;}
 </style>
 </head>
 <body>
@@ -54,40 +32,34 @@ function save(){
 function addStore(){
   const name = document.getElementById("storeName").value;
   if(!name) return;
-  stores.push({
-    name:name,
-    visits:0,
-    buyDays:0,
-    items:0
-  });
+  stores.push({name:name,visits:0,buyDays:0,items:0});
   document.getElementById("storeName").value="";
-  save();
-  render();
+  save();render();
 }
 
-function visit(index){
-  stores[index].visits++;
-  save();
-  render();
+function visit(i){ stores[i].visits++; save();render(); }
+function visitMinus(i){
+  if(stores[i].visits>0){stores[i].visits--;}
+  save();render();
 }
 
-function bought(index){
-  stores[index].buyDays++;
+function bought(i){
+  stores[i].buyDays++;
   const num = prompt("今日の仕入れ個数は？");
-  if(num){
-    stores[index].items += parseInt(num);
-  }
-  save();
-  render();
+  if(num){stores[i].items+=parseInt(num);}
+  save();render();
+}
+
+function boughtMinus(i){
+  if(stores[i].buyDays>0){stores[i].buyDays--;}
+  save();render();
 }
 
 function render(){
-  const list = document.getElementById("storeList");
+  const list=document.getElementById("storeList");
   list.innerHTML="";
   stores.forEach((s,i)=>{
-    const rate = s.visits>0 ? 
-      ((s.buyDays/s.visits)*100).toFixed(1) : 0;
-
+    const rate=s.visits>0?((s.buyDays/s.visits)*100).toFixed(1):0;
     list.innerHTML+=`
       <div class="store">
         <b>${s.name}</b><br>
@@ -95,8 +67,10 @@ function render(){
         仕入れ成功日：${s.buyDays}日<br>
         仕入れ成功率：${rate}%<br>
         総仕入れ個数：${s.items}個<br>
-        <button onclick="visit(${i})">訪問した</button>
-        <button onclick="bought(${i})">仕入れ成功</button>
+        <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
+        <button class="smallbtn" onclick="visitMinus(${i})">訪問−</button>
+        <button class="smallbtn" onclick="bought(${i})">成功＋</button>
+        <button class="smallbtn" onclick="boughtMinus(${i})">成功−</button>
       </div>
     `;
   });
