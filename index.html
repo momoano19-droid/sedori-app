@@ -4,13 +4,17 @@
 <meta charset="UTF-8">
 <title>せどりGPS管理PRO</title>
 <style>
-body{font-family:-apple-system;padding:20px;background:#f4f6f8;}
-h1{font-size:20px;}
-input,button{padding:10px;margin:5px 0;width:100%;font-size:16px;}
-button{background:#007aff;color:white;border:none;border-radius:8px;}
-.smallbtn{width:48%;display:inline-block;}
-.store{background:white;padding:10px;margin-top:10px;border-radius:10px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
-.small{font-size:14px;color:gray;}
+  body{font-family:-apple-system;padding:20px;background:#f4f6f8;}
+  h1{font-size:20px;margin:0 0 10px 0;}
+  input,button{padding:10px;margin:6px 0;width:100%;font-size:16px;}
+  button{background:#007aff;color:white;border:none;border-radius:10px;}
+  .grid{display:flex;gap:8px;flex-wrap:wrap;}
+  .smallbtn{flex:1 1 calc(50% - 8px); }
+  .store{background:#fff;padding:12px;margin-top:12px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+  .meta{line-height:1.6;}
+  .strong{font-weight:700;}
+  .danger{background:#ff3b30;}
+  .gray{color:#666;font-size:14px;}
 </style>
 </head>
 <body>
@@ -25,55 +29,140 @@ button{background:#007aff;color:white;border:none;border-radius:8px;}
 <script>
 let stores = JSON.parse(localStorage.getItem("stores")) || [];
 
+/** 互換性：古いデータにprofitが無い場合の補完 */
+stores = stores.map(s => ({
+  name: s.name ?? "店舗",
+  visits: Number(s.visits ?? 0),
+  buyDays: Number(s.buyDays ?? 0),
+  items: Number(s.items ?? 0),
+  profit: Number(s.profit ?? 0),
+}));
+
+function clampNonNeg(n){ return Math.max(0, Number(n) || 0); }
+
 function save(){
   localStorage.setItem("stores", JSON.stringify(stores));
 }
 
 function addStore(){
-  const name = document.getElementById("storeName").value;
+  const name = document.getElementById("storeName").value.trim();
   if(!name) return;
-  stores.push({name:name,visits:0,buyDays:0,items:0});
+  stores.push({name, visits:0, buyDays:0, items:0, profit:0});
   document.getElementById("storeName").value="";
-  save();render();
+  save(); render();
 }
 
-function visit(i){ stores[i].visits++; save();render(); }
+function visit(i){ stores[i].visits++; save(); render(); }
 function visitMinus(i){
-  if(stores[i].visits>0){stores[i].visits--;}
-  save();render();
+  stores[i].visits = clampNonNeg(stores[i].visits - 1);
+  // 整合性：成功日が訪問を超えないようにする（任意だけど実用上おすすめ）
+  if(stores[i].buyDays > stores[i].visits) stores[i].buyDays = stores[i].visits;
+  save(); render();
 }
 
-function bought(i){
+function boughtPlus(i){
   stores[i].buyDays++;
-  const num = prompt("今日の仕入れ個数は？");
-  if(num){stores[i].items+=parseInt(num);}
-  save();render();
+  if(stores[i].buyDays > stores[i].visits) stores[i].visits = stores[i].buyDays; // 成功が入ったら訪問も最低限合わせる
+  const num = prompt("今回の仕入れ個数は？（数字）", "1");
+  if(num !== null && String(num).trim() !== ""){
+    stores[i].items += clampNonNeg(parseInt(num,10));
+  }
+  save(); render();
+}
+function boughtMinus(i){
+  stores[i].buyDays = clampNonNeg(stores[i].buyDays - 1);
+  save(); render();
 }
 
-function boughtMinus(i){
-  if(stores[i].buyDays>0){stores[i].buyDays--;}
-  save();render();
+function itemsPlus(i){
+  const num = prompt("追加する個数は？（数字）", "1");
+  if(num !== null && String(num).trim() !== ""){
+    stores[i].items += clampNonNeg(parseInt(num,10));
+  }
+  save(); render();
+}
+function itemsMinus(i){
+  const num = prompt("減らす個数は？（数字）", "1");
+  if(num !== null && String(num).trim() !== ""){
+    stores[i].items = clampNonNeg(stores[i].items - clampNonNeg(parseInt(num,10)));
+  }
+  save(); render();
+}
+
+function profitPlus(i){
+  const yen = prompt("追加する利益（円）は？（数字）", "1000");
+  if(yen !== null && String(yen).trim() !== ""){
+    stores[i].profit += clampNonNeg(parseInt(yen,10));
+  }
+  save(); render();
+}
+function profitMinus(i){
+  const yen = prompt("減らす利益（円）は？（数字）", "1000");
+  if(yen !== null && String(yen).trim() !== ""){
+    stores[i].profit = clampNonNeg(stores[i].profit - clampNonNeg(parseInt(yen,10)));
+  }
+  save(); render();
 }
 
 function render(){
-  const list=document.getElementById("storeList");
-  list.innerHTML="";
+  const list = document.getElementById("storeList");
+  list.innerHTML = "";
+
   stores.forEach((s,i)=>{
-    const rate=s.visits>0?((s.buyDays/s.visits)*100).toFixed(1):0;
-    list.innerHTML+=`
+    const visits = clampNonNeg(s.visits);
+    const success = clampNonNeg(s.buyDays);
+    const items = clampNonNeg(s.items);
+    const profit = clampNonNeg(s.profit);
+
+    const rate = visits > 0 ? (success / visits) * 100 : 0;                 // 成功率%
+    const avgProfit = success > 0 ? (profit / success) : 0;                 // 1回あたり平均利益
+    const expected = (rate/100) * avgProfit;                                // 期待値
+    const profitPerItem = items > 0 ? (profit / items) : 0;                 // 1商品あたり利益
+
+    list.innerHTML += `
       <div class="store">
-        <b>${s.name}</b><br>
-        訪問回数：${s.visits}回<br>
-        仕入れ成功日：${s.buyDays}日<br>
-        仕入れ成功率：${rate}%<br>
-        総仕入れ個数：${s.items}個<br>
-        <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
-        <button class="smallbtn" onclick="visitMinus(${i})">訪問−</button>
-        <button class="smallbtn" onclick="bought(${i})">成功＋</button>
-        <button class="smallbtn" onclick="boughtMinus(${i})">成功−</button>
+        <div class="strong">${escapeHtml(s.name)}</div>
+        <div class="meta">
+          訪問回数：${visits}回<br>
+          成功回数：${success}回（=仕入れできた日）<br>
+          総仕入れ個数：${items}個<br>
+          合計利益：${profit.toLocaleString()}円<br>
+          成功率：${rate.toFixed(1)}%<br>
+          平均利益（1回）：${Math.round(avgProfit).toLocaleString()}円<br>
+          <span class="strong">期待値（1訪問あたり）：${Math.round(expected).toLocaleString()}円</span><br>
+          1商品あたり利益：${Math.round(profitPerItem).toLocaleString()}円
+        </div>
+
+        <div class="grid" style="margin-top:10px;">
+          <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
+          <button class="smallbtn danger" onclick="visitMinus(${i})">訪問−</button>
+
+          <button class="smallbtn" onclick="boughtPlus(${i})">成功＋（個数入力あり）</button>
+          <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
+
+          <button class="smallbtn" onclick="itemsPlus(${i})">個数＋</button>
+          <button class="smallbtn danger" onclick="itemsMinus(${i})">個数−</button>
+
+          <button class="smallbtn" onclick="profitPlus(${i})">利益＋</button>
+          <button class="smallbtn danger" onclick="profitMinus(${i})">利益−</button>
+        </div>
+
+        <div class="gray" style="margin-top:8px;">
+          ※「成功＋」は成功回数を増やし、ついでに個数を入力できます。
+        </div>
       </div>
     `;
   });
+}
+
+/** XSS対策（念のため） */
+function escapeHtml(str){
+  return String(str)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
 render();
