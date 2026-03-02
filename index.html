@@ -46,6 +46,7 @@
   .gray{color:#666; font-size:14px;}
   .mini{color:#667; font-size:12px;}
   .badge{display:inline-block; padding:2px 8px; border-radius:999px; background:#eef2f7; color:#334; font-size:12px; margin:4px 6px 0 0;}
+  .badge.addr{background:#fff0d6; color:#6a3d00; border:1px solid #ffd59a;} /* 住所ありマーク */
   .kv{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
   .pill{background:#f0f3f8; border-radius:999px; padding:6px 10px; font-size:13px;}
   .sectionTitle{font-weight:800; color:#223; margin-top:18px;}
@@ -85,6 +86,8 @@
   <input id="storeName" placeholder="店舗名を入力">
   <input id="prefName" placeholder="都道府県（例：茨城県）">
 </div>
+
+<input id="address" placeholder="住所（任意：入れるとマーク表示）">
 <input id="mapUrl" placeholder="GoogleマップURL（Safariで開いた長いURLを貼る）">
 <input id="defaultCategory" placeholder="デフォルトカテゴリ（例：本 / 家電）">
 <button onclick="addStore()">店舗追加</button>
@@ -92,7 +95,7 @@
 <!-- 検索＆表示 -->
 <div class="toolbar">
   <div class="row2">
-    <input id="q" placeholder="🔎 店舗検索（店舗名/都道府県/カテゴリ）" oninput="render()">
+    <input id="q" placeholder="🔎 店舗検索（店舗名/都道府県/カテゴリ/住所）" oninput="render()">
     <select id="prefFilter" onchange="render()"></select>
   </div>
 
@@ -123,7 +126,7 @@
 
   <div class="gray">
     ※ GoogleマップURLは「共有リンクをSafariで開いた後の長いURL」を貼ると座標が取れます。<br>
-    ※ 「成功＋」を押すと個数を聞かれ、カテゴリ選択でカテゴリ別個数が集計されます。
+    ※ 「成功＋」を押すと個数入力 → カテゴリ選択でカテゴリ別個数が集計されます。
   </div>
 </div>
 
@@ -286,6 +289,7 @@ stores = stores.map(s => ({
   id: s.id || ensureId(),
   name: (s.name ?? "店舗").toString(),
   pref: (s.pref ?? "").toString().trim(),
+  address: (s.address ?? "").toString().trim(), /* ★住所 */
   visits: Number(s.visits ?? 0),
   buyDays: Number(s.buyDays ?? 0),
   items: Number(s.items ?? 0),
@@ -471,8 +475,8 @@ function closeModal(commit){
 
   if(delta !== 0){
     s.items = clampNonNeg(s.items + delta);
-    addItemsToCategory(i, cat, delta);
-    addLog(s.id, "items", delta, cat);
+    if(cat) addItemsToCategory(i, cat, delta);
+    addLog(s.id, "items", delta, cat || null);
   }
   saveAll();
   render();
@@ -483,6 +487,7 @@ function closeModal(commit){
 function addStore(){
   const name = document.getElementById("storeName").value.trim();
   const pref = document.getElementById("prefName").value.trim();
+  const address = document.getElementById("address").value.trim();
   const url = document.getElementById("mapUrl").value.trim();
   const dc = document.getElementById("defaultCategory").value.trim();
   if(!name) return;
@@ -503,6 +508,7 @@ function addStore(){
   stores.push({
     id: ensureId(),
     name, pref,
+    address,
     visits:0, buyDays:0, items:0, profit:0,
     mapUrl:url, lat, lng,
     defaultCategory: dc,
@@ -514,6 +520,7 @@ function addStore(){
 
   document.getElementById("storeName").value="";
   document.getElementById("prefName").value="";
+  document.getElementById("address").value="";
   document.getElementById("mapUrl").value="";
   document.getElementById("defaultCategory").value="";
 
@@ -533,6 +540,9 @@ function editStore(i){
 
   const newPref = prompt("都道府県（現在値入り・空欄OK）", (s.pref||"").trim());
   if(newPref===null) return;
+
+  const newAddr = prompt("住所（現在値入り・空欄OK）", (s.address||"").trim());
+  if(newAddr===null) return;
 
   const newUrl = prompt("GoogleマップURL（現在値入り・空欄OK）", (s.mapUrl||"").trim());
   if(newUrl===null) return;
@@ -558,6 +568,7 @@ function editStore(i){
 
   s.name = nameTrim;
   s.pref = String(newPref).trim();
+  s.address = String(newAddr).trim();
   s.mapUrl = urlTrim;
   s.lat = lat; s.lng = lng;
   s.defaultCategory = String(newDefaultCat).trim();
@@ -654,7 +665,7 @@ function profitPlus(i){
 }
 function profitMinus(i){
   const s = stores[i];
-  const yen = prompt("減らす利益（円）は？（数字）", "1000");
+  const yen = prompt("利益減算（円）は？（数字）", "1000");
   if(yen!==null && String(yen).trim()!==""){
     const d = clampNonNeg(parseInt(yen,10));
     s.profit = clampNonNeg(s.profit - d);
@@ -737,7 +748,7 @@ function matchesQuery(s, q){
   if(!q) return true;
   const cats = Object.keys(s.categoryCounts||{}).join(" ");
   const qcats = (s.quickCategories||[]).join(" ");
-  const t = (s.name + " " + (s.pref||"") + " " + (s.defaultCategory||"") + " " + qcats + " " + cats).toLowerCase();
+  const t = (s.name + " " + (s.pref||"") + " " + (s.address||"") + " " + (s.defaultCategory||"") + " " + qcats + " " + cats).toLowerCase();
   return t.includes(q.toLowerCase());
 }
 
@@ -862,10 +873,12 @@ function render(){
         <div class="storeTitle">${escapeHtml(s.name)}</div>
         <div>
           <span class="badge">${escapeHtml((s.pref||"").trim() || "未設定")}</span>
+          ${(s.address||"").trim() ? `<span class="badge addr">📍 住所あり</span>` : ""}
           ${(s.defaultCategory||"").trim() ? `<span class="badge">カテゴリ:${escapeHtml(s.defaultCategory.trim())}</span>` : ""}
           ${s.lastVisitDate ? `<span class="badge">最終訪問:${escapeHtml(s.lastVisitDate)}</span>` : ""}
           ${s.today ? `<span class="badge">今日行く</span>` : ""}
         </div>
+        ${(s.address||"").trim() ? `<div class="mini">住所：${escapeHtml(s.address.trim())}</div>` : ""}
         <div class="checkline">
           <input type="checkbox" id="today_${i}" ${s.today ? "checked":""} onchange="toggleToday(${i}, this.checked)">
           <label for="today_${i}">今日行く</label>
@@ -1109,7 +1122,7 @@ function buildTodayRoute(){
   );
 }
 
-/* ========= report ========= */
+/* ========= report (with category totals) ========= */
 function setReportThisMonth(){
   document.getElementById("reportMonth").value = tokyoMonthStr();
   renderReport();
@@ -1153,6 +1166,65 @@ function sumLogsByMonth(months){
   });
   return map;
 }
+
+/* ★カテゴリ集計（期間のitemsログから） */
+function categoryTotalsForDates(dateSet){
+  const totals = new Map(); // cat -> items
+  logs.forEach(l=>{
+    if(l.type!=="items") return;
+    if(!l.category) return;
+    if(!dateSet.has(l.date)) return;
+    const cat = String(l.category).trim();
+    if(!cat) return;
+    totals.set(cat, (totals.get(cat)||0) + (Number(l.delta)||0));
+  });
+  // マイナスで0以下になるカテゴリは消す
+  for(const [k,v] of Array.from(totals.entries())){
+    if(v<=0) totals.delete(k);
+  }
+  return Array.from(totals.entries()).sort((a,b)=>b[1]-a[1]);
+}
+
+function categoryTotalsForMonths(monthSet){
+  const totals = new Map(); // cat -> items
+  logs.forEach(l=>{
+    if(l.type!=="items") return;
+    if(!l.category) return;
+    const m = l.date.slice(0,7);
+    if(!monthSet.has(m)) return;
+    const cat = String(l.category).trim();
+    if(!cat) return;
+    totals.set(cat, (totals.get(cat)||0) + (Number(l.delta)||0));
+  });
+  for(const [k,v] of Array.from(totals.entries())){
+    if(v<=0) totals.delete(k);
+  }
+  return Array.from(totals.entries()).sort((a,b)=>b[1]-a[1]);
+}
+
+function renderCategoryReportBlock(title, rows){
+  if(rows.length===0){
+    return `<div class="gray" style="margin-top:10px;">${escapeHtml(title)}：データなし（itemsログにカテゴリが必要）</div>`;
+  }
+  const total = rows.reduce((s,r)=>s+r[1],0);
+  const top = rows.slice(0,20);
+  return `
+    <div class="sectionTitle">${escapeHtml(title)}</div>
+    <div class="kv">
+      <div class="pill"><b>カテゴリ数</b> ${rows.length}</div>
+      <div class="pill"><b>合計個数</b> ${total}</div>
+      <div class="pill"><b>TOP</b> ${escapeHtml(top[0][0])}（${top[0][1]}）</div>
+    </div>
+    <table>
+      <thead><tr><th>カテゴリ</th><th>個数</th></tr></thead>
+      <tbody>
+        ${top.map(([cat,cnt])=>`<tr><td>${escapeHtml(cat)}</td><td>${cnt}</td></tr>`).join("")}
+      </tbody>
+    </table>
+    <div class="mini">※ 上位20カテゴリのみ表示</div>
+  `;
+}
+
 function renderReport(){
   const mode = document.getElementById("reportMode").value;
   const month = document.getElementById("reportMonth").value || tokyoMonthStr();
@@ -1171,6 +1243,9 @@ function renderReport(){
       tV+=r.visit; tS+=r.success; tI+=r.items; tP+=r.profit;
     });
 
+    const dateSet = new Set(dates);
+    const catRows = categoryTotalsForDates(dateSet);
+
     area.innerHTML = `
       <div class="kv">
         <div class="pill"><b>対象月</b> ${escapeHtml(month)}</div>
@@ -1188,10 +1263,12 @@ function renderReport(){
           }).join("")}
         </tbody>
       </table>
+      ${renderCategoryReportBlock("カテゴリ別仕入れ個数（選択月）", catRows)}
     `;
     return;
   }
 
+  // monthly (12 months)
   const months = [];
   for(let i=11;i>=0;i--) months.push(addMonths(month, -i));
   const map = sumLogsByMonth(months);
@@ -1201,6 +1278,9 @@ function renderReport(){
     const r = map.get(m);
     tV+=r.visit; tS+=r.success; tI+=r.items; tP+=r.profit;
   });
+
+  const monthSet = new Set(months);
+  const catRows = categoryTotalsForMonths(monthSet);
 
   area.innerHTML = `
     <div class="kv">
@@ -1219,6 +1299,7 @@ function renderReport(){
         }).join("")}
       </tbody>
     </table>
+    ${renderCategoryReportBlock("カテゴリ別仕入れ個数（直近12ヶ月合計）", catRows)}
   `;
 }
 
