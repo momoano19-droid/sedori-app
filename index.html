@@ -4,10 +4,33 @@
 <meta charset="UTF-8">
 <title>せどりGPS管理PRO</title>
 <style>
+  :root{
+    --btn-font: 16px;
+    --btn-pad: 10px;
+    --btn-radius: 10px;
+  }
+
   body{font-family:-apple-system;padding:20px;background:#f4f6f8;}
   h1{font-size:20px;margin:0 0 10px 0;}
   input,select,button{padding:10px;margin:6px 0;width:100%;font-size:16px;}
-  button{background:#007aff;color:white;border:none;border-radius:10px;}
+  button{
+    background:#007aff;
+    color:white;
+    border:none;
+    border-radius:var(--btn-radius,10px);
+    padding:var(--btn-pad,10px);
+    font-size:var(--btn-font,16px);
+  }
+
+  /* 店舗名を大きく */
+  .storeTitle{
+    font-size:22px;
+    font-weight:800;
+    line-height:1.2;
+    color:#111;
+    margin-bottom:6px;
+  }
+
   .grid{display:flex;gap:8px;flex-wrap:wrap;}
   .smallbtn{flex:1 1 calc(50% - 8px);}
   .store{background:#fff;padding:12px;margin-top:12px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
@@ -16,7 +39,7 @@
   .danger{background:#ff3b30;}
   .neutral{background:#34c759;}
   .gray{color:#666;font-size:14px;}
-  .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2f7;color:#334;font-size:12px;margin-left:6px;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2f7;color:#334;font-size:12px;margin-right:6px;margin-top:6px;}
   .sectionTitle{font-weight:700;color:#223;margin-top:18px;}
   .row2{display:flex;gap:8px;}
   .row2 > *{flex:1;}
@@ -27,9 +50,30 @@
   .kv{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
   .pill{background:#f0f3f8;border-radius:999px;padding:6px 10px;font-size:13px;}
   .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
-  .chip{background:#eef2f7;color:#123;border-radius:999px;padding:8px 12px;font-size:14px;border:1px solid #dfe6f2;width:auto;}
+
+  /* chipボタンもサイズ反映（少し小さめ） */
+  .chip{
+    background:#eef2f7;color:#123;border-radius:999px;
+    padding:calc(var(--btn-pad,10px) - 2px) 12px;
+    font-size:calc(var(--btn-font,16px) - 2px);
+    border:1px solid #dfe6f2;width:auto;
+  }
   .chip.primary{background:#007aff;color:#fff;border-color:#007aff;}
   .chip.gray{background:#f0f3f8;color:#444;}
+  .chip.neutral{background:#34c759;color:#fff;border-color:#34c759;}
+
+  .linkbtn{
+    background:#e9eef6;color:#123;text-decoration:none;display:inline-block;
+    border-radius:var(--btn-radius,10px);
+    padding:var(--btn-pad,10px);
+    font-size:var(--btn-font,16px);
+    text-align:center;width:100%;
+  }
+
+  .mini{font-size:12px;color:#667;}
+  .checkline{display:flex;align-items:center;gap:8px;margin-top:8px;}
+  .checkline input{width:auto;margin:0;}
+  .checkline label{font-size:14px;color:#223;}
 
   /* modal */
   .overlay{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.35);display:none;align-items:center;justify-content:center;padding:16px;z-index:9999;}
@@ -82,7 +126,7 @@
       <option value="visits">訪問回数順</option>
       <option value="route">ルート最適化（期待値÷距離）</option>
     </select>
-    <button onclick="optimizeRoute()">🚗 現在地でルート最適化</button>
+    <button onclick="optimizeRoute()">🚗 現在地でスコア更新</button>
   </div>
 
   <div class="row2">
@@ -92,26 +136,75 @@
 
   <div class="gray" style="margin-top:8px;">
     ※ 個数を入れると「カテゴリ選択（ボタン最大24 / クイック最大12）」が出ます。<br>
-    ※ 訪問＋は自動で日付も記録します（レポートで日別・月別集計）。
+    ※ 訪問＋/利益＋/個数±/成功± は押した日付でログ保存 → レポート/ランキング/分析に反映します。
   </div>
 </div>
 
-<!-- ===== レポート ===== -->
+<!-- ===== ボタン表示設定（角ボタンサイズをカスタム） ===== -->
 <div class="toolbar">
-  <div class="strong">📊 レポート（日別・月別集計）</div>
+  <div class="strong">⚙️ ボタン表示設定（角ボタンサイズ）</div>
+
   <div class="row2" style="margin-top:8px;">
-    <select id="reportMode" onchange="renderReport()">
-      <option value="daily">日別（選択月）</option>
-      <option value="monthly">月別（直近12ヶ月）</option>
-    </select>
-    <input id="reportMonth" type="month">
+    <div>
+      <div class="gray">文字サイズ</div>
+      <input id="btnFont" type="range" min="12" max="24" value="16" oninput="updateBtnStyle()">
+    </div>
+    <div>
+      <div class="gray">ボタン高さ（余白）</div>
+      <input id="btnPad" type="range" min="6" max="20" value="10" oninput="updateBtnStyle()">
+    </div>
   </div>
-  <div class="row2">
-    <button onclick="setReportThisMonth()">今月</button>
-    <button onclick="setReportLastMonth()">先月</button>
+
+  <div>
+    <div class="gray">角丸（R）</div>
+    <input id="btnRadius" type="range" min="6" max="28" value="10" oninput="updateBtnStyle()">
   </div>
-  <div class="gray">集計対象：訪問数 / 成功数 / 仕入れ個数 / 利益（±を含む）</div>
-  <div id="reportArea"></div>
+
+  <div class="gray">※ 変更は自動保存されます</div>
+</div>
+
+<!-- ===== 今日の行動計画 ===== -->
+<div class="toolbar">
+  <div class="row2" style="align-items:center;">
+    <div class="strong">🗓 今日の行動計画</div>
+    <button id="todayRouteBtn" onclick="buildTodayRoute()">今日ルート作成</button>
+  </div>
+  <div class="gray">各店舗で「今日行く」にチェック → ここで巡回順を自動作成 → Googleマップで開けます（最大10地点：目的地+waypoints9）</div>
+  <div id="todayPlanArea" style="margin-top:8px;"></div>
+</div>
+
+<!-- ===== レポート＋分析（表示/非表示） ===== -->
+<div class="toolbar">
+  <div class="row2" style="align-items:center;">
+    <div class="strong">📊 レポート・ランキング・カテゴリ分析</div>
+    <button id="toggleReportBtn" onclick="toggleReport()">表示/非表示</button>
+  </div>
+
+  <div id="reportWrap">
+    <div class="row2" style="margin-top:8px;">
+      <select id="reportMode" onchange="renderReportAll()">
+        <option value="daily">日別（選択月）</option>
+        <option value="monthly">月別（直近12ヶ月）</option>
+      </select>
+      <input id="reportMonth" type="month">
+    </div>
+
+    <div class="row2">
+      <button onclick="setReportThisMonth()">今月</button>
+      <button onclick="setReportLastMonth()">先月</button>
+    </div>
+
+    <div class="gray">集計対象：訪問数 / 成功数 / 仕入れ個数 / 利益（±を含む）</div>
+
+    <div id="reportArea"></div>
+
+    <div class="sectionTitle">🏆 店舗ランキング（選択月）</div>
+    <div id="rankArea"></div>
+
+    <div class="sectionTitle">🧩 カテゴリ分析（選択月）</div>
+    <div class="gray">※ 利益は「カテゴリ個数比で按分した推定値」です（利益入力にカテゴリが無いため）。</div>
+    <div id="catArea"></div>
+  </div>
 </div>
 
 <div id="storeList"></div>
@@ -138,12 +231,41 @@
 
 <script>
 /** ===== 設定値 ===== */
-const QUICK_LIMIT = 12; // 店ごとのクイック最大
-const CHIP_LIMIT  = 24; // 表示するカテゴリボタン最大（カテゴリなしは別枠）
+const QUICK_LIMIT = 12;
+const CHIP_LIMIT  = 24;
+const REPORT_VISIBLE_KEY = "report_visible";
+
+/** ===== ボタンスタイル（保存＆反映） ===== */
+function updateBtnStyle(){
+  const font = Number(document.getElementById("btnFont").value || 16);
+  const pad  = Number(document.getElementById("btnPad").value || 10);
+  const rad  = Number(document.getElementById("btnRadius").value || 10);
+
+  document.documentElement.style.setProperty("--btn-font", font + "px");
+  document.documentElement.style.setProperty("--btn-pad", pad + "px");
+  document.documentElement.style.setProperty("--btn-radius", rad + "px");
+
+  localStorage.setItem("btnStyle", JSON.stringify({font, pad, rad}));
+}
+function loadBtnStyle(){
+  try{
+    const s = JSON.parse(localStorage.getItem("btnStyle") || "{}");
+    const font = Number(s.font || 16);
+    const pad  = Number(s.pad  || 10);
+    const rad  = Number(s.rad  || 10);
+
+    document.getElementById("btnFont").value = font;
+    document.getElementById("btnPad").value = pad;
+    document.getElementById("btnRadius").value = rad;
+
+    document.documentElement.style.setProperty("--btn-font", font + "px");
+    document.documentElement.style.setProperty("--btn-pad", pad + "px");
+    document.documentElement.style.setProperty("--btn-radius", rad + "px");
+  }catch(e){}
+}
 
 /** ===== 日付（東京） ===== */
 function tokyoDateStr(d=new Date()){
-  // iPhoneでも安定しやすい：YYYY-MM-DD を作る
   const parts = new Intl.DateTimeFormat('ja-JP', {
     timeZone: 'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit'
   }).formatToParts(d);
@@ -158,7 +280,7 @@ function tokyoMonthStr(d=new Date()){
   }).formatToParts(d);
   const y = parts.find(p=>p.type==='year').value;
   const m = parts.find(p=>p.type==='month').value;
-  return `${y}-${m}`; // YYYY-MM
+  return `${y}-${m}`;
 }
 function addMonths(ym, delta){
   const [y,m] = ym.split('-').map(Number);
@@ -173,13 +295,18 @@ function daysInMonth(ym){
   return new Date(y, m, 0).getDate();
 }
 
-/** ===== ログ（集計用） =====
- * logs: [{date:'YYYY-MM-DD', storeId, type:'visit'|'success'|'items'|'profit', delta:Number}]
+/** ===== ログ =====
+ * logs: [{date:'YYYY-MM-DD', storeId, type:'visit'|'success'|'items'|'profit', delta:Number, category?:string}]
  */
 let logs = JSON.parse(localStorage.getItem("logs")) || [];
 function saveLogs(){ localStorage.setItem("logs", JSON.stringify(logs)); }
-function addLog(storeId, type, delta){
-  logs.push({date: tokyoDateStr(), storeId, type, delta: Number(delta)||0});
+function addLog(storeId, type, delta, category=null){
+  const rec = {date: tokyoDateStr(), storeId, type, delta: Number(delta)||0};
+  if(category !== null && category !== undefined){
+    const c = String(category).trim();
+    if(c) rec.category = c;
+  }
+  logs.push(rec);
   saveLogs();
 }
 
@@ -191,7 +318,7 @@ let lastPos = null;
 // modal state
 let modalState = { open:false, storeIndex:null, deltaItems:0, selectedCat:"" };
 
-// 互換性補完 + storeId付与 + lastVisitDate
+// 互換性補完 + storeId付与 + lastVisitDate + todayFlag
 stores = stores.map(s => ({
   id: s.id || (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2)),
   name: s.name ?? "店舗",
@@ -206,7 +333,8 @@ stores = stores.map(s => ({
   defaultCategory: (s.defaultCategory ?? "").trim(),
   categoryCounts: (s.categoryCounts && typeof s.categoryCounts === "object") ? s.categoryCounts : {},
   quickCategories: Array.isArray(s.quickCategories) ? s.quickCategories.filter(Boolean).slice(0,QUICK_LIMIT) : [],
-  lastVisitDate: (s.lastVisitDate ?? "").trim() // NEW
+  lastVisitDate: (s.lastVisitDate ?? "").trim(),
+  today: !!s.today
 }));
 
 function clampNonNeg(n){ return Math.max(0, Number(n) || 0); }
@@ -214,13 +342,28 @@ function save(){ localStorage.setItem("stores", JSON.stringify(stores)); }
 
 function setLayout(v){ layout=v; localStorage.setItem("layout",layout); render(); }
 
-/** ===== 座標抽出（Google Maps URL） ===== */
+/** ===== Google Maps URLから座標抽出（強化版） ===== */
 function extractLatLng(url){
   if(!url) return null;
+  url = String(url).trim();
+
+  // 1) @lat,lng
   let m = url.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
   if(m) return {lat: parseFloat(m[1]), lng: parseFloat(m[2])};
+
+  // 2) !3dLAT!4dLNG
   m = url.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
   if(m) return {lat: parseFloat(m[1]), lng: parseFloat(m[2])};
+
+  // 3) q=lat,lng / query=lat,lng / ll=lat,lng / center=lat,lng
+  m = url.match(/[?&](?:q|query|ll|center)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+  if(m) return {lat: parseFloat(m[1]), lng: parseFloat(m[2])};
+
+  // 4) /dir/.../lat,lng
+  m = url.match(/\/dir\/[^/]*\/(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+  if(m) return {lat: parseFloat(m[1]), lng: parseFloat(m[2])};
+
+  // maps.app.goo.gl の短縮URLは座標が無いので不可（Safariで開いた長URLを貼る）
   return null;
 }
 
@@ -236,7 +379,7 @@ function addStore(){
   if(mapUrl){
     const c = extractLatLng(mapUrl);
     if(!c){
-      alert("GoogleマップURLから座標が取れませんでした。\n「共有→リンクをコピー」したURLを貼ってください。");
+      alert("URLから座標が取れませんでした。\nGoogleマップ共有リンクをSafariで開いた後の『長いURL』を貼ってください。");
       return;
     }
     lat=c.lat; lng=c.lng;
@@ -255,17 +398,18 @@ function addStore(){
     defaultCategory,
     categoryCounts:{},
     quickCategories: quick,
-    lastVisitDate:""
+    lastVisitDate:"",
+    today:false
   });
 
   document.getElementById("storeName").value="";
   document.getElementById("prefName").value="";
   document.getElementById("mapUrl").value="";
   document.getElementById("defaultCategory").value="";
-  save(); render(); renderReport();
+  save(); render(); renderReportAll(); renderTodayPlan();
 }
 
-/** ===== カテゴリ集計 ===== */
+/** ===== カテゴリ集計（累計） ===== */
 function addItemsToCategory(i, cat, delta){
   const s = stores[i];
   const category = String(cat||"").trim();
@@ -277,7 +421,6 @@ function addItemsToCategory(i, cat, delta){
   if(next === 0) delete s.categoryCounts[category];
   else s.categoryCounts[category] = next;
 
-  // クイック反映
   if(!s.quickCategories) s.quickCategories = [];
   if(!s.quickCategories.includes(category)){
     s.quickCategories.unshift(category);
@@ -397,13 +540,13 @@ function closeModal(commit){
     s.items = clampNonNeg(s.items + delta);
     addItemsToCategory(i, cat, delta);
 
-    // LOG: items
-    addLog(s.id, "items", delta);
+    // LOG: items（カテゴリも入れる）
+    addLog(s.id, "items", delta, cat);
   }
 
   save();
   render();
-  renderReport();
+  renderReportAll();
 }
 
 /** ===== 操作（ログ付き） ===== */
@@ -412,14 +555,14 @@ function visit(i){
   s.visits++;
   s.lastVisitDate = tokyoDateStr();
   addLog(s.id, "visit", 1);
-  save(); render(); renderReport();
+  save(); render(); renderReportAll();
 }
 function visitMinus(i){
   const s = stores[i];
   s.visits = clampNonNeg(s.visits - 1);
   if(s.buyDays > s.visits) s.buyDays = s.visits;
   addLog(s.id, "visit", -1);
-  save(); render(); renderReport();
+  save(); render(); renderReportAll();
 }
 
 function boughtPlus(i){
@@ -427,7 +570,6 @@ function boughtPlus(i){
   s.buyDays++;
   if(s.buyDays > s.visits) s.visits = s.buyDays;
 
-  // LOG: success
   addLog(s.id, "success", 1);
 
   const numStr = prompt("今回の仕入れ個数は？（数字）", "1");
@@ -435,14 +577,14 @@ function boughtPlus(i){
     const n = clampNonNeg(parseInt(numStr,10));
     openCategoryModal(i, n, "カテゴリ選択（成功＋）");
   } else {
-    save(); render(); renderReport();
+    save(); render(); renderReportAll();
   }
 }
 function boughtMinus(i){
   const s = stores[i];
   s.buyDays = clampNonNeg(s.buyDays - 1);
   addLog(s.id, "success", -1);
-  save(); render(); renderReport();
+  save(); render(); renderReportAll();
 }
 
 function itemsPlus(i){
@@ -468,7 +610,7 @@ function profitPlus(i){
     s.profit += d;
     addLog(s.id, "profit", d);
   }
-  save(); render(); renderReport();
+  save(); render(); renderReportAll();
 }
 function profitMinus(i){
   const s = stores[i];
@@ -478,10 +620,17 @@ function profitMinus(i){
     s.profit = clampNonNeg(s.profit - d);
     addLog(s.id, "profit", -d);
   }
-  save(); render(); renderReport();
+  save(); render(); renderReportAll();
 }
 
-// 設定（現在値入り / クイック最大12）
+/** ===== 今日行くフラグ ===== */
+function toggleToday(i, checked){
+  stores[i].today = !!checked;
+  save();
+  renderTodayPlan();
+}
+
+/** ===== 設定 ===== */
 function editStore(i){
   const s = stores[i];
 
@@ -507,7 +656,7 @@ function editStore(i){
   if(urlTrim){
     const c = extractLatLng(urlTrim);
     if(!c){
-      alert("URLから座標が取れませんでした。\n「共有→リンクをコピー」したURLを貼ってください。");
+      alert("URLから座標が取れませんでした。\nSafariで開いた後の『長いURL』を貼ってください。");
       return;
     }
     lat=c.lat; lng=c.lng;
@@ -522,17 +671,14 @@ function editStore(i){
   s.defaultCategory = String(newDefaultCat).trim();
   s.quickCategories = String(newQuick).split("/").map(x=>x.trim()).filter(Boolean).slice(0,QUICK_LIMIT);
 
-  save(); render(); renderReport();
+  save(); render(); renderReportAll(); renderTodayPlan();
 }
 
 function deleteStore(i){
   const ok = confirm(`「${stores[i].name}」を削除しますか？\n（データは戻せません）`);
   if(!ok) return;
-  const id = stores[i].id;
   stores.splice(i,1);
-  // 店舗削除時：ログは残す（集計に残したいなら）／消したいなら下を有効化
-  // logs = logs.filter(l => l.storeId !== id); saveLogs();
-  save(); render(); renderReport();
+  save(); render(); renderReportAll(); renderTodayPlan();
 }
 
 /** ===== 指標 ===== */
@@ -573,6 +719,7 @@ function optimizeRoute(){
       lastPos = {lat: pos.coords.latitude, lng: pos.coords.longitude};
       document.getElementById("sortType").value = "route";
       render();
+      renderTodayPlan();
     },
     ()=>{
       alert("位置情報が取得できませんでした。\niPhone設定 > プライバシー > 位置情報サービス で許可を確認してください。");
@@ -683,11 +830,16 @@ function render(){
       const catSum = categorySummary(s);
 
       const header = `
-        <div class="strong">
-          ${escapeHtml(s.name)}
+        <div class="storeTitle">${escapeHtml(s.name)}</div>
+        <div>
           <span class="badge">${escapeHtml((s.pref||"").trim() || "未設定")}</span>
           ${(s.defaultCategory||"").trim() ? `<span class="badge">カテゴリ:${escapeHtml(s.defaultCategory.trim())}</span>` : ""}
           ${s.lastVisitDate ? `<span class="badge">最終訪問:${escapeHtml(s.lastVisitDate)}</span>` : ""}
+          ${s.today ? `<span class="badge">今日行く</span>` : ""}
+        </div>
+        <div class="checkline">
+          <input type="checkbox" id="today_${i}" ${s.today ? "checked":""} onchange="toggleToday(${i}, this.checked)">
+          <label for="today_${i}">今日行く</label>
         </div>
       `;
 
@@ -752,6 +904,8 @@ function render(){
               <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
               <button class="smallbtn" onclick="itemsPlus(${i})">個数＋</button>
               <button class="smallbtn danger" onclick="itemsMinus(${i})">個数−</button>
+              <button class="smallbtn" onclick="profitPlus(${i})">利益＋</button>
+              <button class="smallbtn danger" onclick="profitMinus(${i})">利益−</button>
               <button class="smallbtn neutral" onclick="editStore(${i})">設定</button>
               <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
             </div>
@@ -792,10 +946,6 @@ function render(){
             <button class="smallbtn neutral" onclick="editStore(${i})">設定</button>
             <button class="smallbtn danger" onclick="deleteStore(${i})">削除</button>
           </div>
-
-          <div class="gray" style="margin-top:8px;">
-            ※ レポートはこのログから日別/月別集計します
-          </div>
         </div>
       `;
     });
@@ -806,21 +956,31 @@ function render(){
   }
 }
 
-/** ===== レポート描画 ===== */
+/** ===== レポート表示トグル ===== */
+function toggleReport(){
+  const cur = localStorage.getItem(REPORT_VISIBLE_KEY);
+  const next = (cur === "0") ? "1" : "0";
+  localStorage.setItem(REPORT_VISIBLE_KEY, next);
+  applyReportVisibility();
+}
+function applyReportVisibility(){
+  const visible = (localStorage.getItem(REPORT_VISIBLE_KEY) ?? "1") !== "0";
+  document.getElementById("reportWrap").style.display = visible ? "block" : "none";
+  document.getElementById("toggleReportBtn").textContent = visible ? "非表示" : "表示";
+}
+
+/** ===== レポート（日別/月別） ===== */
 function setReportThisMonth(){
   document.getElementById("reportMonth").value = tokyoMonthStr();
-  renderReport();
+  renderReportAll();
 }
 function setReportLastMonth(){
   document.getElementById("reportMonth").value = addMonths(tokyoMonthStr(), -1);
-  renderReport();
+  renderReportAll();
 }
-
 function sumLogsByDate(dates){
-  // dates: array of YYYY-MM-DD
   const map = new Map();
   dates.forEach(d=>map.set(d, {visit:0, success:0, items:0, profit:0}));
-
   logs.forEach(l=>{
     if(!map.has(l.date)) return;
     const row = map.get(l.date);
@@ -829,16 +989,11 @@ function sumLogsByDate(dates){
     if(l.type === "items") row.items += l.delta;
     if(l.type === "profit") row.profit += l.delta;
   });
-
-  // マイナスが出たときの見た目が気になるならここで clamp も可能（今はログ通り）
   return map;
 }
-
 function sumLogsByMonth(months){
-  // months: array of YYYY-MM
   const map = new Map();
   months.forEach(m=>map.set(m, {visit:0, success:0, items:0, profit:0}));
-
   logs.forEach(l=>{
     const m = l.date.slice(0,7);
     if(!map.has(m)) return;
@@ -848,8 +1003,76 @@ function sumLogsByMonth(months){
     if(l.type === "items") row.items += l.delta;
     if(l.type === "profit") row.profit += l.delta;
   });
-
   return map;
+}
+
+/** ===== 選択月の店舗集計 ===== */
+function monthRangeDates(month){
+  const dim = daysInMonth(month);
+  const dates = [];
+  for(let d=1; d<=dim; d++) dates.push(`${month}-${String(d).padStart(2,'0')}`);
+  return dates;
+}
+function aggregateByStoreForMonth(month){
+  const dates = new Set(monthRangeDates(month));
+  const byStore = new Map();
+  stores.forEach(s=>byStore.set(s.id, {visit:0,success:0,items:0,profit:0, name:s.name, pref:s.pref}));
+
+  logs.forEach(l=>{
+    if(!dates.has(l.date)) return;
+    if(!byStore.has(l.storeId)){
+      byStore.set(l.storeId, {visit:0,success:0,items:0,profit:0, name:"(削除済み店舗)", pref:""});
+    }
+    const r = byStore.get(l.storeId);
+    if(l.type==="visit") r.visit += l.delta;
+    if(l.type==="success") r.success += l.delta;
+    if(l.type==="items") r.items += l.delta;
+    if(l.type==="profit") r.profit += l.delta;
+  });
+  return byStore;
+}
+
+/** ===== 選択月のカテゴリ集計 ===== */
+function aggregateByCategoryForMonth(month){
+  const dates = new Set(monthRangeDates(month));
+  const catItems = new Map();
+  const storeItems = new Map();
+  const storeProfit = new Map();
+
+  logs.forEach(l=>{
+    if(!dates.has(l.date)) return;
+    if(l.type==="items"){
+      const c = (l.category||"").trim() || "（カテゴリなし）";
+      catItems.set(c, (catItems.get(c)||0) + l.delta);
+      storeItems.set(l.storeId, (storeItems.get(l.storeId)||0) + l.delta);
+    }
+    if(l.type==="profit"){
+      storeProfit.set(l.storeId, (storeProfit.get(l.storeId)||0) + l.delta);
+    }
+  });
+
+  const catProfitEst = new Map();
+  logs.forEach(l=>{
+    if(!dates.has(l.date)) return;
+    if(l.type!=="items") return;
+    const c = (l.category||"").trim() || "（カテゴリなし）";
+    const st = l.storeId;
+    const totI = storeItems.get(st) || 0;
+    const p = storeProfit.get(st) || 0;
+    if(totI > 0){
+      const est = p * (l.delta / totI);
+      catProfitEst.set(c, (catProfitEst.get(c)||0) + est);
+    }
+  });
+
+  return {catItems, catProfitEst};
+}
+
+/** ===== レポート＋ランキング＋カテゴリ分析：まとめ描画 ===== */
+function renderReportAll(){
+  renderReport();
+  renderRankings();
+  renderCategoryAnalytics();
 }
 
 function renderReport(){
@@ -861,14 +1084,9 @@ function renderReport(){
   area.innerHTML = "";
 
   if(mode === "daily"){
-    const dim = daysInMonth(month);
-    const dates = [];
-    for(let d=1; d<=dim; d++){
-      dates.push(`${month}-${String(d).padStart(2,'0')}`);
-    }
+    const dates = monthRangeDates(month);
     const map = sumLogsByDate(dates);
 
-    // 合計
     let tV=0,tS=0,tI=0,tP=0;
     dates.forEach(dt=>{
       const r = map.get(dt);
@@ -890,7 +1108,6 @@ function renderReport(){
 
     dates.forEach(dt=>{
       const r = map.get(dt);
-      // 0だけの日は薄く見せたいならここでスキップも可能（今は表示）
       html += `
         <tr>
           <td>${escapeHtml(dt)}</td>
@@ -907,12 +1124,9 @@ function renderReport(){
     return;
   }
 
-  // monthly
   const months = [];
-  const base = month; // 選択月を基準に過去11ヶ月＋当月
-  for(let i=11; i>=0; i--){
-    months.push(addMonths(base, -i));
-  }
+  const base = month;
+  for(let i=11; i>=0; i--) months.push(addMonths(base, -i));
   const map = sumLogsByMonth(months);
 
   let tV=0,tS=0,tI=0,tP=0;
@@ -951,6 +1165,210 @@ function renderReport(){
   area.innerHTML = html;
 }
 
+function renderRankings(){
+  const month = document.getElementById("reportMonth").value || tokyoMonthStr();
+  const byStore = aggregateByStoreForMonth(month);
+
+  const rows = Array.from(byStore.values())
+    .map(r=>{
+      const v = r.visit || 0;
+      const s = r.success || 0;
+      const p = r.profit || 0;
+      const rate = v>0 ? (s/v)*100 : 0;
+      const pPerVisit = v>0 ? p/v : 0;
+      return {...r, rate, pPerVisit};
+    })
+    .filter(r => r.visit !== 0 || r.success !== 0 || r.items !== 0 || r.profit !== 0);
+
+  const topProfit = rows.slice().sort((a,b)=>b.profit-a.profit).slice(0,10);
+  const topPPV = rows.slice().sort((a,b)=>b.pPerVisit-a.pPerVisit).slice(0,10);
+  const topRate = rows.slice().sort((a,b)=>b.rate-a.rate).slice(0,10);
+
+  const area = document.getElementById("rankArea");
+  let html = `
+    <div class="row2">
+      <div>
+        <div class="strong">利益TOP10</div>
+        ${tableFromRank(topProfit, "profit")}
+      </div>
+      <div>
+        <div class="strong">利益÷訪問TOP10</div>
+        ${tableFromRank(topPPV, "pPerVisit")}
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <div class="strong">成功率TOP10</div>
+      ${tableFromRank(topRate, "rate")}
+    </div>
+  `;
+  area.innerHTML = html;
+}
+
+function tableFromRank(list, mode){
+  if(list.length===0) return `<div class="gray">データがありません</div>`;
+  let head = `<table><thead><tr><th>#</th><th>店舗</th><th>指標</th><th class="mini">訪問/成功/個数</th></tr></thead><tbody>`;
+  let body = "";
+  list.forEach((r, idx)=>{
+    let metric = "";
+    if(mode==="profit") metric = `${Number(r.profit).toLocaleString()}円`;
+    if(mode==="pPerVisit") metric = `${Math.round(r.pPerVisit).toLocaleString()}円/訪問`;
+    if(mode==="rate") metric = `${r.rate.toFixed(1)}%`;
+    body += `
+      <tr>
+        <td>${idx+1}</td>
+        <td>${escapeHtml(r.name)}</td>
+        <td>${metric}</td>
+        <td class="mini">${r.visit}/${r.success}/${r.items}</td>
+      </tr>
+    `;
+  });
+  return head + body + `</tbody></table>`;
+}
+
+function renderCategoryAnalytics(){
+  const month = document.getElementById("reportMonth").value || tokyoMonthStr();
+  const {catItems, catProfitEst} = aggregateByCategoryForMonth(month);
+
+  const itemsList = Array.from(catItems.entries())
+    .map(([cat,items])=>({cat, items}))
+    .sort((a,b)=>b.items-a.items)
+    .slice(0,15);
+
+  const profitList = Array.from(catProfitEst.entries())
+    .map(([cat,p])=>({cat, profit: p}))
+    .sort((a,b)=>b.profit-a.profit)
+    .slice(0,15);
+
+  let html = `
+    <div class="row2">
+      <div>
+        <div class="strong">カテゴリ別 個数TOP15</div>
+        ${itemsList.length?`<table><thead><tr><th>#</th><th>カテゴリ</th><th>個数</th></tr></thead><tbody>
+          ${itemsList.map((x,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(x.cat)}</td><td>${x.items}</td></tr>`).join("")}
+        </tbody></table>`:`<div class="gray">データがありません</div>`}
+      </div>
+      <div>
+        <div class="strong">カテゴリ別 利益（推定）TOP15</div>
+        ${profitList.length?`<table><thead><tr><th>#</th><th>カテゴリ</th><th>推定利益</th></tr></thead><tbody>
+          ${profitList.map((x,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(x.cat)}</td><td>${Math.round(x.profit).toLocaleString()}円</td></tr>`).join("")}
+        </tbody></table>`:`<div class="gray">データがありません</div>`}
+      </div>
+    </div>
+  `;
+  document.getElementById("catArea").innerHTML = html;
+}
+
+/** ===== 今日ルート（巡回順自動） ===== */
+function renderTodayPlan(){
+  const area = document.getElementById("todayPlanArea");
+  const todays = stores.map((s,idx)=>({...s,_idx:idx})).filter(s=>s.today);
+
+  if(todays.length===0){
+    area.innerHTML = `<div class="gray">「今日行く」にチェックした店舗がありません。</div>`;
+    return;
+  }
+
+  const noCoord = todays.filter(s=>typeof s.lat!=="number" || typeof s.lng!=="number");
+  const coordOk = todays.filter(s=>typeof s.lat==="number" && typeof s.lng==="number");
+
+  let html = "";
+  if(noCoord.length){
+    html += `<div class="gray">※ 座標が無い店舗はルート作成に入れられません：${noCoord.map(s=>escapeHtml(s.name)).join(" / ")}</div>`;
+  }
+  html += `<div class="kv">
+    <div class="pill"><b>今日行く</b> ${todays.length}店舗</div>
+    <div class="pill"><b>ルート対象</b> ${coordOk.length}店舗</div>
+    <div class="pill"><b>現在地</b> ${lastPos ? "取得済み" : "未取得（スコア更新を押して）"}</div>
+  </div>`;
+
+  area.innerHTML = html;
+}
+
+function buildTodayRoute(){
+  if(!navigator.geolocation){
+    alert("この端末では位置情報が使えません。");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>{
+      lastPos = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+      const start = {lat:lastPos.lat, lng:lastPos.lng};
+
+      const targets = stores
+        .map((s,idx)=>({...s,_idx:idx}))
+        .filter(s=>s.today)
+        .filter(s=>typeof s.lat==="number" && typeof s.lng==="number");
+
+      if(targets.length === 0){
+        alert("今日行く店舗のうち、座標が入っている店舗がありません。\nGoogleマップURL（長いURL）を設定してください。");
+        renderTodayPlan();
+        return;
+      }
+
+      const remaining = targets.slice();
+      const route = [];
+      let cur = start;
+      while(remaining.length){
+        let bestIdx = 0;
+        let bestD = Infinity;
+        for(let i=0;i<remaining.length;i++){
+          const d = distanceKm(cur.lat, cur.lng, remaining[i].lat, remaining[i].lng);
+          if(d < bestD){
+            bestD = d;
+            bestIdx = i;
+          }
+        }
+        const next = remaining.splice(bestIdx,1)[0];
+        route.push({...next, _fromDist: bestD});
+        cur = {lat: next.lat, lng: next.lng};
+      }
+
+      const area = document.getElementById("todayPlanArea");
+      let total = route.reduce((a,b)=>a+(b._fromDist||0),0);
+      let html = `
+        <div class="kv">
+          <div class="pill"><b>巡回数</b> ${route.length}</div>
+          <div class="pill"><b>推定移動距離</b> ${total.toFixed(1)}km</div>
+        </div>
+        <table>
+          <thead><tr><th>#</th><th>店舗</th><th>距離（前地点→）</th><th>操作</th></tr></thead>
+          <tbody>
+            ${route.map((s,i)=>`
+              <tr>
+                <td>${i+1}</td>
+                <td>${escapeHtml(s.name)}</td>
+                <td>${(s._fromDist||0).toFixed(1)}km</td>
+                <td><button class="chip neutral" onclick="visit(${s._idx})" style="width:auto;">訪問＋</button></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+
+      const limited = route.slice(0,10);
+      const origin = `${start.lat},${start.lng}`;
+      const destination = `${limited[limited.length-1].lat},${limited[limited.length-1].lng}`;
+      const waypoints = limited.slice(0,limited.length-1).map(s=>`${s.lat},${s.lng}`).join("|");
+      const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}${waypoints?`&waypoints=${encodeURIComponent(waypoints)}`:""}&travelmode=driving`;
+
+      html += `
+        <div style="margin-top:10px;">
+          <a class="linkbtn" href="${url}" target="_blank" rel="noopener">🧭 Googleマップでルートを開く（最大10地点）</a>
+          <div class="mini" style="margin-top:6px;">
+            ※ 10店舗以上は先頭から10店舗のみ送ります。必要なら「2回に分けて」開く運用が最強です。
+          </div>
+        </div>
+      `;
+
+      area.innerHTML = html;
+    },
+    ()=>{
+      alert("位置情報が取得できませんでした。\niPhone設定 > プライバシー > 位置情報サービス で許可を確認してください。");
+    },
+    {enableHighAccuracy:true, timeout:10000}
+  );
+}
+
 /** ===== XSS対策 ===== */
 function escapeHtml(str){
   return String(str)
@@ -966,10 +1384,12 @@ function escapeHtmlAttr(str){
 
 /** ===== 初期化 ===== */
 (function init(){
-  // レポート月を今月にセット
   document.getElementById("reportMonth").value = tokyoMonthStr();
+  applyReportVisibility();
+  loadBtnStyle();
   render();
-  renderReport();
+  renderReportAll();
+  renderTodayPlan();
 })();
 </script>
 
