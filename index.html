@@ -78,6 +78,13 @@
   .chip.primary{background:#007aff; color:#fff; border-color:#007aff;}
   .chip.gray{background:#f0f3f8; color:#444;}
   .chip.neutral{background:#34c759; color:#fff; border-color:#34c759;}
+  .addrCopyBtn{
+  width:auto !important;
+  flex:0 0 auto;
+  padding:4px 8px !important;
+  font-size:12px !important;
+  line-height:1.2;
+}
 </style>
 </head>
 
@@ -870,8 +877,8 @@ function render(){
       const catSum = categorySummary(s);
 
       const addressBlock = (s.address||"").trim()
-        ? `<div class="addrRow"><div class="mini addrText">住所：${escapeHtml(s.address.trim())}</div><button class="secondary" style="width:auto;white-space:nowrap;" onclick="copyAddress(${i})">住所コピー</button></div>`
-        : "";
+  ? `<div class="addrRow"><div class="mini addrText">住所：${escapeHtml(s.address.trim())}</div><button class="secondary addrCopyBtn" onclick="copyAddress(${i})">住所コピー</button></div>`
+  : "";
 
       const header = `
         <div class="storeTitle">${escapeHtml(s.name)}</div>
