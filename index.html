@@ -60,7 +60,9 @@
   th{background:#f7f9fc; color:#223;}
   tr:last-child td{border-bottom:none;}
 
-  /* modal */
+  .addrRow{display:flex; gap:8px; align-items:flex-start; margin-top:4px;}
+  .addrText{flex:1; min-width:0;}
+
   .overlay{position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,0.35); display:none; align-items:center; justify-content:center; padding:16px; z-index:9999;}
   .modal{background:#fff; border-radius:14px; max-width:520px; width:100%; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,0.25);}
   .modal h2{margin:0 0 6px 0; font-size:18px;}
@@ -92,7 +94,6 @@
 <input id="defaultCategory" placeholder="デフォルトカテゴリ（例：本 / 家電）">
 <button onclick="addStore()">店舗追加</button>
 
-<!-- 検索＆表示 -->
 <div class="toolbar">
   <div class="row2">
     <input id="q" placeholder="🔎 店舗検索（店舗名/都道府県/カテゴリ/住所）" oninput="render()">
@@ -125,12 +126,11 @@
   </div>
 
   <div class="gray">
-    ※ GoogleマップURLは「共有リンクをSafariで開いた後の長いURL」を貼ると座標が取れます。<br>
-    ※ 「成功＋」を押すと個数入力 → カテゴリ選択でカテゴリ別個数が集計されます。
+    ※ 個数＋ を押すと「成功」も自動で +1 されます。<br>
+    ※ GoogleマップURLは「共有リンクをSafariで開いた後の長いURL」を貼ると座標が取れます。
   </div>
 </div>
 
-<!-- ボタン表示設定（表示/非表示 + 保存） -->
 <div class="toolbar">
   <div class="row2" style="align-items:center;">
     <div style="font-weight:800;">⚙️ ボタン表示設定</div>
@@ -157,7 +157,6 @@
   </div>
 </div>
 
-<!-- 今日の行動計画 -->
 <div class="toolbar">
   <div class="row2" style="align-items:center;">
     <div style="font-weight:800;">🗓 今日の行動計画</div>
@@ -177,7 +176,6 @@
   <div id="todayPlanArea" style="margin-top:8px;"></div>
 </div>
 
-<!-- レポート（表示/非表示 + 保存） -->
 <div class="toolbar">
   <div class="row2" style="align-items:center;">
     <div style="font-weight:800;">📊 レポート</div>
@@ -204,7 +202,6 @@
 
 <div id="storeList"></div>
 
-<!-- カテゴリ選択モーダル -->
 <div id="overlay" class="overlay" onclick="event.stopPropagation()">
   <div class="modal" onclick="event.stopPropagation()">
     <h2 id="modalTitle">カテゴリ選択</h2>
@@ -225,7 +222,6 @@
 </div>
 
 <script>
-/* ========= keys ========= */
 const QUICK_LIMIT = 12;
 const CHIP_LIMIT = 24;
 const KEY_STORES = "stores";
@@ -235,13 +231,11 @@ const KEY_BTN_STYLE = "btnStyle";
 const KEY_BTN_VISIBLE = "btn_setting_visible";
 const KEY_REPORT_VISIBLE = "report_visible";
 
-/* ========= persistence ========= */
 let stores = JSON.parse(localStorage.getItem(KEY_STORES) || "[]");
 let logs = JSON.parse(localStorage.getItem(KEY_LOGS) || "[]");
 let layout = localStorage.getItem(KEY_LAYOUT) || "detail";
 let lastPos = null;
 
-/* ========= helpers ========= */
 function escapeHtml(str){
   return String(str)
     .replaceAll("&","&amp;")
@@ -255,7 +249,6 @@ function ensureId(){
   return (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2));
 }
 
-/* Tokyo date */
 function tokyoDateStr(d=new Date()){
   const parts = new Intl.DateTimeFormat('ja-JP', {
     timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit'
@@ -284,7 +277,6 @@ function daysInMonth(ym){
   return new Date(y, m, 0).getDate();
 }
 
-/* ========= migrate/normalize ========= */
 stores = stores.map(s => ({
   id: s.id || ensureId(),
   name: (s.name ?? "店舗").toString(),
@@ -310,7 +302,6 @@ function saveAll(){
   localStorage.setItem(KEY_LAYOUT, layout);
 }
 
-/* ========= logs ========= */
 function addLog(storeId, type, delta, category=null){
   const rec = {date: tokyoDateStr(), storeId, type, delta: Number(delta)||0};
   if(category!==null && category!==undefined){
@@ -321,7 +312,6 @@ function addLog(storeId, type, delta, category=null){
   saveAll();
 }
 
-/* ========= metrics ========= */
 function calcMetrics(s){
   const visits = clampNonNeg(s.visits);
   const success = clampNonNeg(s.buyDays);
@@ -336,7 +326,6 @@ function calcMetrics(s){
   return {visits, success, items, profit, rate, avgProfit, expected, profitPerItem};
 }
 
-/* ========= map url -> latlng ========= */
 function extractLatLng(url){
   if(!url) return null;
   url = String(url).trim();
@@ -356,7 +345,6 @@ function extractLatLng(url){
   return null;
 }
 
-/* ========= categories ========= */
 function addItemsToCategory(i, cat, delta){
   const s = stores[i];
   const category = String(cat||"").trim();
@@ -396,7 +384,6 @@ function categorySummary(s){
   return `（${top.join(" / ")}${more}）`;
 }
 
-/* ========= modal (category select) ========= */
 let modalState = {open:false, storeIndex:null, deltaItems:0, selectedCat:""};
 
 function openCategoryModal(storeIndex, deltaItems, title){
@@ -483,7 +470,6 @@ function closeModal(commit){
   renderReport();
 }
 
-/* ========= actions ========= */
 function addStore(){
   const name = document.getElementById("storeName").value.trim();
   const pref = document.getElementById("prefName").value.trim();
@@ -596,6 +582,35 @@ function toggleToday(i, checked){
   renderTodayPlan();
 }
 
+function copyAddress(i){
+  const addr = (stores[i].address || "").trim();
+  if(!addr){
+    alert("住所が登録されていません。");
+    return;
+  }
+
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(addr)
+      .then(()=>alert("住所をコピーしました"))
+      .catch(()=>fallbackCopy(addr));
+  } else {
+    fallbackCopy(addr);
+  }
+}
+function fallbackCopy(text){
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  try{
+    document.execCommand("copy");
+    alert("住所をコピーしました");
+  }catch(e){
+    alert("コピーに失敗しました");
+  }
+  document.body.removeChild(ta);
+}
+
 function visit(i){
   const s = stores[i];
   s.visits++;
@@ -615,40 +630,29 @@ function visitMinus(i){
   renderReport();
 }
 
-function boughtPlus(i){
-  const s = stores[i];
-  s.buyDays++;
-  if(s.buyDays > s.visits) s.visits = s.buyDays;
-  addLog(s.id, "success", 1);
-
-  const numStr = prompt("今回の仕入れ個数は？（数字）", "1");
-  if(numStr!==null && String(numStr).trim()!==""){
-    const n = clampNonNeg(parseInt(numStr,10));
-    openCategoryModal(i, n, "カテゴリ選択（成功＋）");
-    return;
-  }
-  saveAll(); render(); renderReport();
-}
-function boughtMinus(i){
-  const s = stores[i];
-  s.buyDays = clampNonNeg(s.buyDays-1);
-  addLog(s.id, "success", -1);
-  saveAll();
-  render();
-  renderReport();
-}
-
+/* 成功＋/成功−ボタン削除対応:
+   個数＋すると success/buyDays も +1 */
 function itemsPlus(i){
   const numStr = prompt("追加する個数は？（数字）", "1");
   if(numStr!==null && String(numStr).trim()!==""){
     const n = clampNonNeg(parseInt(numStr,10));
+    if(n <= 0) return;
+
+    const s = stores[i];
+    s.buyDays++;
+    if(s.buyDays > s.visits) s.visits = s.buyDays;
+    addLog(s.id, "success", 1);
+
     openCategoryModal(i, n, "カテゴリ選択（個数＋）");
   }
 }
+
+/* 個数−は成功数に影響させない */
 function itemsMinus(i){
   const numStr = prompt("減らす個数は？（数字）", "1");
   if(numStr!==null && String(numStr).trim()!==""){
     const n = clampNonNeg(parseInt(numStr,10));
+    if(n <= 0) return;
     openCategoryModal(i, -n, "カテゴリ選択（個数−）");
   }
 }
@@ -661,7 +665,9 @@ function profitPlus(i){
     s.profit += d;
     addLog(s.id, "profit", d);
   }
-  saveAll(); render(); renderReport();
+  saveAll();
+  render();
+  renderReport();
 }
 function profitMinus(i){
   const s = stores[i];
@@ -671,10 +677,11 @@ function profitMinus(i){
     s.profit = clampNonNeg(s.profit - d);
     addLog(s.id, "profit", -d);
   }
-  saveAll(); render(); renderReport();
+  saveAll();
+  render();
+  renderReport();
 }
 
-/* ========= distance ========= */
 function distanceKm(lat1,lng1,lat2,lng2){
   const R = 6371;
   const dLat = (lat2-lat1) * Math.PI/180;
@@ -706,7 +713,6 @@ function optimizeRoute(){
   );
 }
 
-/* ========= layout ========= */
 function setLayout(v){
   layout = v;
   localStorage.setItem(KEY_LAYOUT, layout);
@@ -727,7 +733,6 @@ function applyLayoutButtonState(){
   });
 }
 
-/* ========= filters ========= */
 function buildPrefFilter(){
   const prefSet = new Set();
   stores.forEach(s=>{ if((s.pref||"").trim()) prefSet.add(s.pref.trim()); });
@@ -752,7 +757,6 @@ function matchesQuery(s, q){
   return t.includes(q.toLowerCase());
 }
 
-/* ========= today bulk ========= */
 function buildTodayPrefSelect(){
   const sel = document.getElementById("todayPrefSelect");
   if(!sel) return;
@@ -797,7 +801,6 @@ function todayBulkClearAll(){
   bulkSetTodayByPref("__ALL__", false);
 }
 
-/* ========= render stores ========= */
 function render(){
   buildPrefFilter();
   buildTodayPrefSelect();
@@ -814,7 +817,7 @@ function render(){
     let dist=null, score=null;
     if(lastPos && typeof s.lat==="number" && typeof s.lng==="number"){
       dist = distanceKm(lastPos.lat,lastPos.lng,s.lat,s.lng);
-      score = m.expected / (dist + 0.2); // 円/km（近似）
+      score = m.expected / (dist + 0.2);
     }
     return {...s, _idx:idx, _m:m, _dist:dist, _score:score};
   })
@@ -869,6 +872,10 @@ function render(){
       const effText = (typeof s._score==="number") ? `${Math.round(s._score).toLocaleString()} 円/km` : "—";
       const catSum = categorySummary(s);
 
+      const addressBlock = (s.address||"").trim()
+        ? `<div class="addrRow"><div class="mini addrText">住所：${escapeHtml(s.address.trim())}</div><button class="secondary" style="width:auto;white-space:nowrap;" onclick="copyAddress(${i})">住所コピー</button></div>`
+        : "";
+
       const header = `
         <div class="storeTitle">${escapeHtml(s.name)}</div>
         <div>
@@ -878,7 +885,7 @@ function render(){
           ${s.lastVisitDate ? `<span class="badge">最終訪問:${escapeHtml(s.lastVisitDate)}</span>` : ""}
           ${s.today ? `<span class="badge">今日行く</span>` : ""}
         </div>
-        ${(s.address||"").trim() ? `<div class="mini">住所：${escapeHtml(s.address.trim())}</div>` : ""}
+        ${addressBlock}
         <div class="checkline">
           <input type="checkbox" id="today_${i}" ${s.today ? "checked":""} onchange="toggleToday(${i}, this.checked)">
           <label for="today_${i}">今日行く</label>
@@ -939,8 +946,6 @@ function render(){
             <div class="grid" style="margin-top:10px;">
               <button class="smallbtn" onclick="visit(${i})">訪問＋</button>
               <button class="smallbtn danger" onclick="visitMinus(${i})">訪問−</button>
-              <button class="smallbtn" onclick="boughtPlus(${i})">成功＋</button>
-              <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
               <button class="smallbtn" onclick="itemsPlus(${i})">個数＋</button>
               <button class="smallbtn danger" onclick="itemsMinus(${i})">個数−</button>
               <button class="smallbtn" onclick="profitPlus(${i})">利益＋</button>
@@ -967,10 +972,7 @@ function render(){
               <button class="smallbtn" onclick="visit(${i})">訪問＋（日付自動）</button>
               <button class="smallbtn danger" onclick="visitMinus(${i})">訪問−</button>
 
-              <button class="smallbtn" onclick="boughtPlus(${i})">成功＋（カテゴリ）</button>
-              <button class="smallbtn danger" onclick="boughtMinus(${i})">成功−</button>
-
-              <button class="smallbtn" onclick="itemsPlus(${i})">個数＋（カテゴリ）</button>
+              <button class="smallbtn" onclick="itemsPlus(${i})">個数＋（成功も+1）</button>
               <button class="smallbtn danger" onclick="itemsMinus(${i})">個数−（カテゴリ）</button>
 
               <button class="smallbtn" onclick="profitPlus(${i})">利益＋（日付自動）</button>
@@ -992,7 +994,6 @@ function render(){
   }
 }
 
-/* ========= today plan + route (D) ========= */
 function renderTodayPlan(){
   const area = document.getElementById("todayPlanArea");
   const todays = stores.map((s,idx)=>({...s,_idx:idx})).filter(s=>s.today);
@@ -1036,7 +1037,7 @@ function buildTodayRoute(){
         .filter(s=>typeof s.lat==="number" && typeof s.lng==="number");
 
       if(targets.length===0){
-        alert("今日行く店舗のうち、座標が入っている店舗がありません。\n各店舗の設定でGoogleマップURL（長いURL）を入れてください。");
+        alert("今日行く店舗のうち、座標が入っている店舗がありません。");
         renderTodayPlan();
         return;
       }
@@ -1052,7 +1053,7 @@ function buildTodayRoute(){
         for(let i=0;i<remaining.length;i++){
           const dist = distanceKm(cur.lat, cur.lng, remaining[i].lat, remaining[i].lng);
           const expected = remaining[i]._m.expected || 0;
-          const score = expected / (dist + 0.3); // 円/km
+          const score = expected / (dist + 0.3);
           if(score > bestScore){
             bestScore = score;
             bestIdx = i;
@@ -1061,13 +1062,12 @@ function buildTodayRoute(){
 
         const next = remaining.splice(bestIdx,1)[0];
         next._fromDist = distanceKm(cur.lat, cur.lng, next.lat, next.lng);
-        next._eff = (next._m.expected || 0) / (next._fromDist + 0.3); // 参考：直前区間での効率
+        next._eff = (next._m.expected || 0) / (next._fromDist + 0.3);
         route.push(next);
         cur = {lat: next.lat, lng: next.lng};
       }
 
       const routeLimited = route.slice(0, 30);
-
       const totalExpected = routeLimited.reduce((sum,s)=>sum + (s._m.expected||0), 0);
       const totalDist = routeLimited.reduce((sum,s)=>sum + (s._fromDist||0), 0);
 
@@ -1116,17 +1116,15 @@ function buildTodayRoute(){
         `;
       });
 
-      html += `<div class="mini" style="margin-top:8px;">※ ルートに入れる店が多い場合は「今日行く」を整理して回すのが最強です。</div>`;
       area.innerHTML = html;
     },
     ()=>{
-      alert("位置情報が取得できませんでした。\niPhone設定 > プライバシー > 位置情報サービス で許可を確認してください。");
+      alert("位置情報が取得できませんでした。");
     },
     {enableHighAccuracy:true, timeout:10000}
   );
 }
 
-/* ========= report (with category totals) ========= */
 function setReportThisMonth(){
   document.getElementById("reportMonth").value = tokyoMonthStr();
   renderReport();
@@ -1170,8 +1168,6 @@ function sumLogsByMonth(months){
   });
   return map;
 }
-
-/* category report */
 function categoryTotalsForDates(dateSet){
   const totals = new Map();
   logs.forEach(l=>{
@@ -1205,7 +1201,7 @@ function categoryTotalsForMonths(monthSet){
 }
 function renderCategoryReportBlock(title, rows){
   if(rows.length===0){
-    return `<div class="gray" style="margin-top:10px;">${escapeHtml(title)}：データなし（個数＋/成功＋でカテゴリを選ぶと貯まります）</div>`;
+    return `<div class="gray" style="margin-top:10px;">${escapeHtml(title)}：データなし（個数＋でカテゴリを選ぶと貯まります）</div>`;
   }
   const total = rows.reduce((s,r)=>s+r[1],0);
   const top = rows.slice(0,20);
@@ -1303,7 +1299,6 @@ function renderReport(){
   `;
 }
 
-/* ========= toggles (with persistence) ========= */
 function updateBtnStyle(){
   const font = Number(document.getElementById("btnFont").value || 16);
   const pad  = Number(document.getElementById("btnPad").value || 10);
@@ -1356,7 +1351,6 @@ function applyReportVisibility(){
   document.getElementById("toggleReportBtn").textContent = visible ? "非表示" : "表示";
 }
 
-/* ========= init ========= */
 (function init(){
   document.getElementById("reportMonth").value = tokyoMonthStr();
   loadBtnStyle();
