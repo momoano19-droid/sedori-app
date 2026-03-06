@@ -576,12 +576,6 @@ function deleteStore(i){
   renderTodayPlan();
 }
 
-function toggleToday(i, checked){
-  stores[i].today = !!checked;
-  saveAll();
-  renderTodayPlan();
-}
-
 function copyAddress(i){
   const addr = (stores[i].address || "").trim();
   if(!addr){
@@ -611,6 +605,12 @@ function fallbackCopy(text){
   document.body.removeChild(ta);
 }
 
+function toggleToday(i, checked){
+  stores[i].today = !!checked;
+  saveAll();
+  renderTodayPlan();
+}
+
 function visit(i){
   const s = stores[i];
   s.visits++;
@@ -630,8 +630,6 @@ function visitMinus(i){
   renderReport();
 }
 
-/* 成功＋/成功−ボタン削除対応:
-   個数＋すると success/buyDays も +1 */
 function itemsPlus(i){
   const numStr = prompt("追加する個数は？（数字）", "1");
   if(numStr!==null && String(numStr).trim()!==""){
@@ -647,7 +645,6 @@ function itemsPlus(i){
   }
 }
 
-/* 個数−は成功数に影響させない */
 function itemsMinus(i){
   const numStr = prompt("減らす個数は？（数字）", "1");
   if(numStr!==null && String(numStr).trim()!==""){
