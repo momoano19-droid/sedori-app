@@ -100,11 +100,20 @@ button.secondary{
     <button class="secondary" onclick="location.href='index.html'">← 店舗管理に戻る</button>
     <select id="monthSelect"></select>
   </div>
+  <div class="row2">
+    <select id="prefSelect"></select>
+    <button class="secondary" onclick="render()">再表示</button>
+  </div>
 </div>
 
 <div class="card">
   <h2>月間サマリー</h2>
   <div id="summary" class="kv"></div>
+</div>
+
+<div class="card">
+  <h2>都道府県別 期待値サマリー</h2>
+  <table id="prefExpectedTable"></table>
 </div>
 
 <div class="card">
@@ -144,6 +153,15 @@ function monthList(){
   return [...set].sort().reverse();
 }
 
+function prefList(){
+  const set = new Set();
+  stores.forEach(s=>{
+    const p = (s.pref || "").trim();
+    if(p) set.add(p);
+  });
+  return [...set].sort((a,b)=>a.localeCompare(b,"ja"));
+}
+
 function initMonth(){
   const sel=document.getElementById("monthSelect");
   const months=monthList();
@@ -162,7 +180,21 @@ function initMonth(){
   });
 
   sel.onchange=render;
-  render();
+}
+
+function initPref(){
+  const sel = document.getElementById("prefSelect");
+  const prefs = prefList();
+
+  sel.innerHTML = `<option value="__ALL__">全都道府県</option>`;
+  prefs.forEach(p=>{
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p;
+    sel.appendChild(opt);
+  });
+
+  sel.onchange = render;
 }
 
 function calcMonth(month){
@@ -182,42 +214,31 @@ function calcMonth(month){
   return {visit,success,items,profit};
 }
 
-function renderSummary(month){
-  const m=calcMonth(month);
-  const avgItems=m.success ? (m.items/m.success).toFixed(2) : 0;
-  const successRate=m.visit ? ((m.success/m.visit)*100).toFixed(1) : 0;
+function calcStoreStats(prefFilter="__ALL__"){
+  return stores
+    .filter(s=>{
+      if(prefFilter==="__ALL__") return true;
+      return (s.pref || "").trim() === prefFilter;
+    })
+    .map(s=>{
+      const visits=s.visits||0;
+      const success=s.buyDays||0;
+      const profit=s.profit||0;
 
-  document.getElementById("summary").innerHTML=`
-    <div class="pill">登録店舗 ${stores.length}件</div>
-    <div class="pill">訪問 ${m.visit}</div>
-    <div class="pill">成功 ${m.success}</div>
-    <div class="pill">仕入れ個数 ${m.items}</div>
-    <div class="pill">利益 ${m.profit.toLocaleString()}円</div>
-    <div class="pill">月間の店舗平均仕入れ個数 ${avgItems}</div>
-    <div class="pill">月間の仕入れ成功確率 ${successRate}%</div>
-  `;
-}
+      const rate=visits ? success/visits : 0;
+      const avgProfit=success ? profit/success : 0;
+      const expected=rate*avgProfit;
 
-function calcStoreStats(){
-  return stores.map(s=>{
-    const visits=s.visits||0;
-    const success=s.buyDays||0;
-    const profit=s.profit||0;
-
-    const rate=visits ? success/visits : 0;
-    const avgProfit=success ? profit/success : 0;
-    const expected=rate*avgProfit;
-
-    return {
-      name:s.name,
-      pref:s.pref||"",
-      expected,
-      rate:rate*100,
-      profit,
-      visits,
-      success
-    };
-  });
+      return {
+        name:s.name,
+        pref:(s.pref||"").trim() || "未設定",
+        expected,
+        rate:rate*100,
+        profit,
+        visits,
+        success
+      };
+    });
 }
 
 function judgeStore(s){
@@ -230,8 +251,67 @@ function judgeStore(s){
   return {label:"❌ 行かなくていい店舗", cls:"cold", row:"statusCold"};
 }
 
+function renderSummary(month, stats, prefFilter){
+  const m=calcMonth(month);
+  const avgItems=m.success ? (m.items/m.success).toFixed(2) : 0;
+  const successRate=m.visit ? ((m.success/m.visit)*100).toFixed(1) : 0;
+
+  const expectedSum = stats.reduce((sum,s)=>sum+s.expected,0);
+  const expectedAvg = stats.length ? expectedSum / stats.length : 0;
+
+  document.getElementById("summary").innerHTML=`
+    <div class="pill">表示範囲 ${prefFilter==="__ALL__" ? "全都道府県" : prefFilter}</div>
+    <div class="pill">登録店舗 ${stats.length}件</div>
+    <div class="pill">訪問 ${m.visit}</div>
+    <div class="pill">成功 ${m.success}</div>
+    <div class="pill">仕入れ個数 ${m.items}</div>
+    <div class="pill">利益 ${m.profit.toLocaleString()}円</div>
+    <div class="pill">月間の店舗平均仕入れ個数 ${avgItems}</div>
+    <div class="pill">月間の仕入れ成功確率 ${successRate}%</div>
+    <div class="pill">期待値合計 ${Math.round(expectedSum).toLocaleString()}円</div>
+    <div class="pill">平均期待値 ${Math.round(expectedAvg).toLocaleString()}円</div>
+  `;
+}
+
+function renderPrefExpectedTable(){
+  const allStats = calcStoreStats("__ALL__");
+  const map = new Map();
+
+  allStats.forEach(s=>{
+    const pref = s.pref || "未設定";
+    if(!map.has(pref)){
+      map.set(pref, {count:0, expectedSum:0});
+    }
+    const row = map.get(pref);
+    row.count += 1;
+    row.expectedSum += s.expected;
+  });
+
+  const rows = Array.from(map.entries()).map(([pref, row])=>({
+    pref,
+    count: row.count,
+    expectedSum: row.expectedSum,
+    expectedAvg: row.count ? row.expectedSum / row.count : 0
+  })).sort((a,b)=>b.expectedSum-a.expectedSum);
+
+  let html = `<tr><th>都道府県</th><th>店舗数</th><th>期待値合計</th><th>平均期待値</th></tr>`;
+
+  rows.forEach(r=>{
+    html += `
+      <tr>
+        <td>${r.pref}</td>
+        <td>${r.count}</td>
+        <td>${Math.round(r.expectedSum).toLocaleString()}円</td>
+        <td>${Math.round(r.expectedAvg).toLocaleString()}円</td>
+      </tr>
+    `;
+  });
+
+  document.getElementById("prefExpectedTable").innerHTML = html;
+}
+
 function renderJudgeTable(stats){
-  let html="<tr><th>店舗</th><th>判定</th><th>期待値</th><th>成功率</th><th>利益</th></tr>";
+  let html="<tr><th>店舗</th><th>都道府県</th><th>判定</th><th>期待値</th><th>成功率</th><th>利益</th></tr>";
 
   stats
     .slice()
@@ -241,6 +321,7 @@ function renderJudgeTable(stats){
       html += `
         <tr class="${j.row}">
           <td>${s.name}</td>
+          <td>${s.pref}</td>
           <td><span class="badge ${j.cls}">${j.label}</span></td>
           <td>${Math.round(s.expected).toLocaleString()}円</td>
           <td>${s.rate.toFixed(1)}%</td>
@@ -253,7 +334,7 @@ function renderJudgeTable(stats){
 }
 
 function tableRender(id,data,field){
-  let html="<tr><th>順位</th><th>店舗</th><th>値</th></tr>";
+  let html="<tr><th>順位</th><th>店舗</th><th>都道府県</th><th>値</th></tr>";
 
   data.slice(0,10).forEach((s,i)=>{
     let v=s[field];
@@ -265,6 +346,7 @@ function tableRender(id,data,field){
       <tr>
         <td>${i+1}</td>
         <td>${s.name}</td>
+        <td>${s.pref}</td>
         <td>${v}</td>
       </tr>
     `;
@@ -275,10 +357,11 @@ function tableRender(id,data,field){
 
 function render(){
   const month=document.getElementById("monthSelect").value;
-  renderSummary(month);
+  const prefFilter=document.getElementById("prefSelect").value;
+  const stats=calcStoreStats(prefFilter);
 
-  const stats=calcStoreStats();
-
+  renderSummary(month, stats, prefFilter);
+  renderPrefExpectedTable();
   renderJudgeTable(stats);
 
   tableRender(
@@ -301,6 +384,8 @@ function render(){
 }
 
 initMonth();
+initPref();
+render();
 </script>
 
 </body>
