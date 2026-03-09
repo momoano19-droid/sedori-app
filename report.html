@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>せどり分析レポート</title>
+
+<style>
+body{
+  font-family:-apple-system;
+  background:#f4f6f8;
+  padding:20px;
+}
+h1{
+  font-size:22px;
+  margin-bottom:10px;
+}
+h2{
+  font-size:18px;
+  margin:0 0 8px 0;
+}
+.card{
+  background:white;
+  padding:16px;
+  border-radius:12px;
+  margin-top:14px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+}
+th,td{
+  padding:8px;
+  border-bottom:1px solid #eee;
+  text-align:left;
+  font-size:14px;
+}
+th{
+  background:#f5f7fa;
+}
+.kv{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:8px;
+}
+.pill{
+  background:#eef2f7;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:13px;
+}
+button, select{
+  width:100%;
+  padding:10px;
+  font-size:16px;
+  border:none;
+  border-radius:10px;
+  box-sizing:border-box;
+}
+button{
+  background:#007aff;
+  color:white;
+}
+button.secondary{
+  background:#e9eef6;
+  color:#111;
+}
+.row2{
+  display:flex;
+  gap:8px;
+}
+.row2>*{
+  flex:1;
+}
+.statusHot{background:#ffe3e3;}
+.statusMid{background:#fff6db;}
+.statusCold{background:#e8f0ff;}
+.badge{
+  display:inline-block;
+  padding:3px 8px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:700;
+}
+.badge.hot{background:#ff4d4f;color:#fff;}
+.badge.mid{background:#faad14;color:#fff;}
+.badge.cold{background:#597ef7;color:#fff;}
+</style>
+</head>
+
+<body>
+
+<h1>📊 せどり分析レポート</h1>
+
+<div class="card">
+  <div class="row2">
+    <button class="secondary" onclick="location.href='index.html'">← 店舗管理に戻る</button>
+    <select id="monthSelect"></select>
+  </div>
+</div>
+
+<div class="card">
+  <h2>月間サマリー</h2>
+  <div id="summary" class="kv"></div>
+</div>
+
+<div class="card">
+  <h2>店舗評価一覧</h2>
+  <div class="kv">
+    <div class="pill">🔥 行くべき店舗 = 期待値2000円以上 or 成功率40%以上</div>
+    <div class="pill">⚠️ 微妙店舗 = 期待値800〜1999円 or 成功率20〜39.9%</div>
+    <div class="pill">❌ 行かなくていい店舗 = 期待値800円未満 かつ 成功率20%未満</div>
+  </div>
+  <table id="judgeTable"></table>
+</div>
+
+<div class="card">
+  <h2>期待値 TOP10</h2>
+  <table id="expectedTable"></table>
+</div>
+
+<div class="card">
+  <h2>成功率 TOP10</h2>
+  <table id="rateTable"></table>
+</div>
+
+<div class="card">
+  <h2>利益 TOP10</h2>
+  <table id="profitTable"></table>
+</div>
+
+<script>
+const stores = JSON.parse(localStorage.getItem("stores")||"[]");
+const logs = JSON.parse(localStorage.getItem("logs")||"[]");
+
+function monthList(){
+  const set=new Set();
+  logs.forEach(l=>{
+    if(l.date) set.add(l.date.slice(0,7));
+  });
+  return [...set].sort().reverse();
+}
+
+function initMonth(){
+  const sel=document.getElementById("monthSelect");
+  const months=monthList();
+
+  if(months.length===0){
+    const now = new Date();
+    const m = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+    months.push(m);
+  }
+
+  months.forEach(m=>{
+    const opt=document.createElement("option");
+    opt.value=m;
+    opt.textContent=m;
+    sel.appendChild(opt);
+  });
+
+  sel.onchange=render;
+  render();
+}
+
+function calcMonth(month){
+  let visit=0;
+  let success=0;
+  let items=0;
+  let profit=0;
+
+  logs.forEach(l=>{
+    if(!l.date || !l.date.startsWith(month)) return;
+    if(l.type==="visit") visit+=l.delta;
+    if(l.type==="success") success+=l.delta;
+    if(l.type==="items") items+=l.delta;
+    if(l.type==="profit") profit+=l.delta;
+  });
+
+  return {visit,success,items,profit};
+}
+
+function renderSummary(month){
+  const m=calcMonth(month);
+  const avgItems=m.success ? (m.items/m.success).toFixed(2) : 0;
+  const successRate=m.visit ? ((m.success/m.visit)*100).toFixed(1) : 0;
+
+  document.getElementById("summary").innerHTML=`
+    <div class="pill">登録店舗 ${stores.length}件</div>
+    <div class="pill">訪問 ${m.visit}</div>
+    <div class="pill">成功 ${m.success}</div>
+    <div class="pill">仕入れ個数 ${m.items}</div>
+    <div class="pill">利益 ${m.profit.toLocaleString()}円</div>
+    <div class="pill">月間の店舗平均仕入れ個数 ${avgItems}</div>
+    <div class="pill">月間の仕入れ成功確率 ${successRate}%</div>
+  `;
+}
+
+function calcStoreStats(){
+  return stores.map(s=>{
+    const visits=s.visits||0;
+    const success=s.buyDays||0;
+    const profit=s.profit||0;
+
+    const rate=visits ? success/visits : 0;
+    const avgProfit=success ? profit/success : 0;
+    const expected=rate*avgProfit;
+
+    return {
+      name:s.name,
+      pref:s.pref||"",
+      expected,
+      rate:rate*100,
+      profit,
+      visits,
+      success
+    };
+  });
+}
+
+function judgeStore(s){
+  if(s.expected >= 2000 || s.rate >= 40){
+    return {label:"🔥 行くべき店舗", cls:"hot", row:"statusHot"};
+  }
+  if(s.expected >= 800 || s.rate >= 20){
+    return {label:"⚠️ 微妙店舗", cls:"mid", row:"statusMid"};
+  }
+  return {label:"❌ 行かなくていい店舗", cls:"cold", row:"statusCold"};
+}
+
+function renderJudgeTable(stats){
+  let html="<tr><th>店舗</th><th>判定</th><th>期待値</th><th>成功率</th><th>利益</th></tr>";
+
+  stats
+    .slice()
+    .sort((a,b)=>b.expected-a.expected)
+    .forEach(s=>{
+      const j = judgeStore(s);
+      html += `
+        <tr class="${j.row}">
+          <td>${s.name}</td>
+          <td><span class="badge ${j.cls}">${j.label}</span></td>
+          <td>${Math.round(s.expected).toLocaleString()}円</td>
+          <td>${s.rate.toFixed(1)}%</td>
+          <td>${s.profit.toLocaleString()}円</td>
+        </tr>
+      `;
+    });
+
+  document.getElementById("judgeTable").innerHTML=html;
+}
+
+function tableRender(id,data,field){
+  let html="<tr><th>順位</th><th>店舗</th><th>値</th></tr>";
+
+  data.slice(0,10).forEach((s,i)=>{
+    let v=s[field];
+    if(field==="rate") v=v.toFixed(1)+"%";
+    if(field==="expected") v=Math.round(v).toLocaleString()+"円";
+    if(field==="profit") v=s.profit.toLocaleString()+"円";
+
+    html+=`
+      <tr>
+        <td>${i+1}</td>
+        <td>${s.name}</td>
+        <td>${v}</td>
+      </tr>
+    `;
+  });
+
+  document.getElementById(id).innerHTML=html;
+}
+
+function render(){
+  const month=document.getElementById("monthSelect").value;
+  renderSummary(month);
+
+  const stats=calcStoreStats();
+
+  renderJudgeTable(stats);
+
+  tableRender(
+    "expectedTable",
+    [...stats].sort((a,b)=>b.expected-a.expected),
+    "expected"
+  );
+
+  tableRender(
+    "rateTable",
+    [...stats].sort((a,b)=>b.rate-a.rate),
+    "rate"
+  );
+
+  tableRender(
+    "profitTable",
+    [...stats].sort((a,b)=>b.profit-a.profit),
+    "profit"
+  );
+}
+
+initMonth();
+</script>
+
+</body>
+</html>
