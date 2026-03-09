@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>せどりGPS管理PRO（完全版）</title>
+<title>せどりGPS管理PRO</title>
 
 <style>
   :root{
@@ -78,18 +78,11 @@
   .chip.primary{background:#007aff; color:#fff; border-color:#007aff;}
   .chip.gray{background:#f0f3f8; color:#444;}
   .chip.neutral{background:#34c759; color:#fff; border-color:#34c759;}
-  .addrCopyBtn{
-  width:auto !important;
-  flex:0 0 auto;
-  padding:4px 8px !important;
-  font-size:12px !important;
-  line-height:1.2;
-}
 </style>
 </head>
 
 <body>
-<h1>せどりGPS管理PRO（完全版）</h1>
+<h1>せどりGPS管理PRO</h1>
 
 <div class="row2">
   <input id="storeName" placeholder="店舗名を入力">
@@ -130,6 +123,11 @@
   <div class="row2">
     <button id="layoutListBtn" class="secondary" onclick="setLayout('list')">リスト</button>
     <button id="layoutAnalysisBtn" class="secondary" onclick="setLayout('analysis')">分析</button>
+  </div>
+
+  <div class="row2">
+    <button onclick="location.href='report.html'">📊 レポート</button>
+    <button class="secondary" onclick="render()">再表示</button>
   </div>
 
   <div class="gray">
@@ -183,30 +181,6 @@
   <div id="todayPlanArea" style="margin-top:8px;"></div>
 </div>
 
-<div class="toolbar">
-  <div class="row2" style="align-items:center;">
-    <div style="font-weight:800;">📊 レポート</div>
-    <button id="toggleReportBtn" onclick="toggleReport()">非表示</button>
-  </div>
-
-  <div id="reportWrap">
-    <div class="row2" style="margin-top:8px;">
-      <select id="reportMode" onchange="renderReport()">
-        <option value="daily">日別（選択月）</option>
-        <option value="monthly">月別（直近12ヶ月）</option>
-      </select>
-      <input id="reportMonth" type="month" onchange="renderReport()">
-    </div>
-
-    <div class="row2">
-      <button class="secondary" onclick="setReportThisMonth()">今月</button>
-      <button class="secondary" onclick="setReportLastMonth()">先月</button>
-    </div>
-
-    <div id="reportArea"></div>
-  </div>
-</div>
-
 <div id="storeList"></div>
 
 <div id="overlay" class="overlay" onclick="event.stopPropagation()">
@@ -236,7 +210,6 @@ const KEY_LOGS = "logs";
 const KEY_LAYOUT = "layout";
 const KEY_BTN_STYLE = "btnStyle";
 const KEY_BTN_VISIBLE = "btn_setting_visible";
-const KEY_REPORT_VISIBLE = "report_visible";
 
 let stores = JSON.parse(localStorage.getItem(KEY_STORES) || "[]");
 let logs = JSON.parse(localStorage.getItem(KEY_LOGS) || "[]");
@@ -264,24 +237,6 @@ function tokyoDateStr(d=new Date()){
   const m = parts.find(p=>p.type==='month').value;
   const day = parts.find(p=>p.type==='day').value;
   return `${y}-${m}-${day}`;
-}
-function tokyoMonthStr(d=new Date()){
-  const parts = new Intl.DateTimeFormat('ja-JP', {
-    timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit'
-  }).formatToParts(d);
-  const y = parts.find(p=>p.type==='year').value;
-  const m = parts.find(p=>p.type==='month').value;
-  return `${y}-${m}`;
-}
-function addMonths(ym, delta){
-  const [y,m] = ym.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m-1, 1));
-  dt.setUTCMonth(dt.getUTCMonth()+delta);
-  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}`;
-}
-function daysInMonth(ym){
-  const [y,m] = ym.split('-').map(Number);
-  return new Date(y, m, 0).getDate();
 }
 
 stores = stores.map(s => ({
@@ -474,7 +429,6 @@ function closeModal(commit){
   }
   saveAll();
   render();
-  renderReport();
 }
 
 function addStore(){
@@ -489,7 +443,7 @@ function addStore(){
   if(url){
     const c = extractLatLng(url);
     if(!c){
-      alert("URLから座標が取れませんでした。\nGoogleマップ共有リンクをSafariで開いた後の『長いURL』を貼ってください。");
+      alert("URLから座標が取れませんでした。");
       return;
     }
     lat=c.lat; lng=c.lng;
@@ -500,8 +454,7 @@ function addStore(){
 
   stores.push({
     id: ensureId(),
-    name, pref,
-    address,
+    name, pref, address,
     visits:0, buyDays:0, items:0, profit:0,
     mapUrl:url, lat, lng,
     defaultCategory: dc,
@@ -519,31 +472,30 @@ function addStore(){
 
   saveAll();
   render();
-  renderReport();
   renderTodayPlan();
 }
 
 function editStore(i){
   const s = stores[i];
 
-  const newName = prompt("店舗名（現在値入り）", s.name || "");
+  const newName = prompt("店舗名", s.name || "");
   if(newName===null) return;
   const nameTrim = String(newName).trim();
   if(!nameTrim) return;
 
-  const newPref = prompt("都道府県（現在値入り・空欄OK）", (s.pref||"").trim());
+  const newPref = prompt("都道府県", (s.pref||"").trim());
   if(newPref===null) return;
 
-  const newAddr = prompt("住所（現在値入り・空欄OK）", (s.address||"").trim());
+  const newAddr = prompt("住所", (s.address||"").trim());
   if(newAddr===null) return;
 
-  const newUrl = prompt("GoogleマップURL（現在値入り・空欄OK）", (s.mapUrl||"").trim());
+  const newUrl = prompt("GoogleマップURL", (s.mapUrl||"").trim());
   if(newUrl===null) return;
 
-  const newDefaultCat = prompt("デフォルトカテゴリ（現在値入り・空欄OK）", (s.defaultCategory||"").trim());
+  const newDefaultCat = prompt("デフォルトカテゴリ", (s.defaultCategory||"").trim());
   if(newDefaultCat===null) return;
 
-  const newQuick = prompt("よく使うカテゴリ（/区切り、最大12）", (s.quickCategories||[]).join("/"));
+  const newQuick = prompt("よく使うカテゴリ（/区切り）", (s.quickCategories||[]).join("/"));
   if(newQuick===null) return;
 
   let lat=s.lat, lng=s.lng;
@@ -551,7 +503,7 @@ function editStore(i){
   if(urlTrim){
     const c = extractLatLng(urlTrim);
     if(!c){
-      alert("URLから座標が取れませんでした。\nSafariで開いた後の『長いURL』を貼ってください。");
+      alert("URLから座標が取れませんでした。");
       return;
     }
     lat=c.lat; lng=c.lng;
@@ -569,17 +521,15 @@ function editStore(i){
 
   saveAll();
   render();
-  renderReport();
   renderTodayPlan();
 }
 
 function deleteStore(i){
-  const ok = confirm(`「${stores[i].name}」を削除しますか？\n（データは戻せません）`);
+  const ok = confirm(`「${stores[i].name}」を削除しますか？`);
   if(!ok) return;
   stores.splice(i,1);
   saveAll();
   render();
-  renderReport();
   renderTodayPlan();
 }
 
@@ -625,7 +575,6 @@ function visit(i){
   addLog(s.id, "visit", 1);
   saveAll();
   render();
-  renderReport();
 }
 function visitMinus(i){
   const s = stores[i];
@@ -634,11 +583,10 @@ function visitMinus(i){
   addLog(s.id, "visit", -1);
   saveAll();
   render();
-  renderReport();
 }
 
 function itemsPlus(i){
-  const numStr = prompt("追加する個数は？（数字）", "1");
+  const numStr = prompt("追加する個数は？", "1");
   if(numStr!==null && String(numStr).trim()!==""){
     const n = clampNonNeg(parseInt(numStr,10));
     if(n <= 0) return;
@@ -651,9 +599,8 @@ function itemsPlus(i){
     openCategoryModal(i, n, "カテゴリ選択（個数＋）");
   }
 }
-
 function itemsMinus(i){
-  const numStr = prompt("減らす個数は？（数字）", "1");
+  const numStr = prompt("減らす個数は？", "1");
   if(numStr!==null && String(numStr).trim()!==""){
     const n = clampNonNeg(parseInt(numStr,10));
     if(n <= 0) return;
@@ -663,7 +610,7 @@ function itemsMinus(i){
 
 function profitPlus(i){
   const s = stores[i];
-  const yen = prompt("追加する利益（円）は？（数字）", "1000");
+  const yen = prompt("追加する利益（円）は？", "1000");
   if(yen!==null && String(yen).trim()!==""){
     const d = clampNonNeg(parseInt(yen,10));
     s.profit += d;
@@ -671,11 +618,10 @@ function profitPlus(i){
   }
   saveAll();
   render();
-  renderReport();
 }
 function profitMinus(i){
   const s = stores[i];
-  const yen = prompt("利益減算（円）は？（数字）", "1000");
+  const yen = prompt("利益減算（円）は？", "1000");
   if(yen!==null && String(yen).trim()!==""){
     const d = clampNonNeg(parseInt(yen,10));
     s.profit = clampNonNeg(s.profit - d);
@@ -683,7 +629,6 @@ function profitMinus(i){
   }
   saveAll();
   render();
-  renderReport();
 }
 
 function distanceKm(lat1,lng1,lat2,lng2){
@@ -710,11 +655,69 @@ function optimizeRoute(){
       render();
       renderTodayPlan();
     },
-    ()=>{
-      alert("位置情報が取得できませんでした。\niPhone設定 > プライバシー > 位置情報サービス で許可を確認してください。");
-    },
+    ()=>{ alert("位置情報が取得できませんでした。"); },
     {enableHighAccuracy:true, timeout:10000}
   );
+}
+
+function buildTodayPrefSelect(){
+  const sel = document.getElementById("todayPrefSelect");
+  const set = new Set();
+  stores.forEach(s=>{
+    const p = (s.pref||"").trim();
+    if(p) set.add(p);
+  });
+  const prefs = Array.from(set).sort((a,b)=>a.localeCompare(b,'ja'));
+  const cur = sel.value || "__ALL__";
+
+  sel.innerHTML = `<option value="__ALL__">（全都道府県）</option>`;
+  prefs.forEach(p=>{
+    sel.innerHTML += `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`;
+  });
+
+  if(Array.from(sel.options).some(o=>o.value===cur)) sel.value=cur;
+}
+function bulkSetTodayByPref(prefValue, on){
+  const pref = (prefValue||"__ALL__");
+  stores.forEach(s=>{
+    if(pref==="__ALL__" || (s.pref||"").trim()===pref){
+      s.today = !!on;
+    }
+  });
+  saveAll();
+  render();
+  renderTodayPlan();
+}
+function todayBulkOn(){
+  bulkSetTodayByPref(document.getElementById("todayPrefSelect").value, true);
+}
+function todayBulkOff(){
+  bulkSetTodayByPref(document.getElementById("todayPrefSelect").value, false);
+}
+function todayBulkClearAll(){
+  bulkSetTodayByPref("__ALL__", false);
+}
+
+function buildPrefFilter(){
+  const prefSet = new Set();
+  stores.forEach(s=>{ if((s.pref||"").trim()) prefSet.add(s.pref.trim()); });
+  const prefs = Array.from(prefSet).sort((a,b)=>a.localeCompare(b,'ja'));
+
+  const sel = document.getElementById("prefFilter");
+  const current = sel.value || "__ALL__";
+  sel.innerHTML = `<option value="__ALL__">全て（都道府県ごと表示）</option>`;
+  prefs.forEach(p=>{
+    sel.innerHTML += `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`;
+  });
+
+  if(Array.from(sel.options).some(o=>o.value===current)) sel.value=current;
+}
+function matchesQuery(s, q){
+  if(!q) return true;
+  const cats = Object.keys(s.categoryCounts||{}).join(" ");
+  const qcats = (s.quickCategories||[]).join(" ");
+  const t = (s.name + " " + (s.pref||"") + " " + (s.address||"") + " " + (s.defaultCategory||"") + " " + qcats + " " + cats).toLowerCase();
+  return t.includes(q.toLowerCase());
 }
 
 function setLayout(v){
@@ -735,74 +738,6 @@ function applyLayoutButtonState(){
     if(layout===k) el.classList.remove("secondary");
     else el.classList.add("secondary");
   });
-}
-
-function buildPrefFilter(){
-  const prefSet = new Set();
-  stores.forEach(s=>{ if((s.pref||"").trim()) prefSet.add(s.pref.trim()); });
-  const prefs = Array.from(prefSet).sort((a,b)=>a.localeCompare(b,'ja'));
-
-  const sel = document.getElementById("prefFilter");
-  const current = sel.value || "__ALL__";
-  sel.innerHTML = "";
-  sel.innerHTML += `<option value="__ALL__">全て（都道府県ごと表示）</option>`;
-  prefs.forEach(p=>{
-    sel.innerHTML += `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`;
-  });
-
-  if(Array.from(sel.options).some(o=>o.value===current)) sel.value=current;
-  else sel.value="__ALL__";
-}
-function matchesQuery(s, q){
-  if(!q) return true;
-  const cats = Object.keys(s.categoryCounts||{}).join(" ");
-  const qcats = (s.quickCategories||[]).join(" ");
-  const t = (s.name + " " + (s.pref||"") + " " + (s.address||"") + " " + (s.defaultCategory||"") + " " + qcats + " " + cats).toLowerCase();
-  return t.includes(q.toLowerCase());
-}
-
-function buildTodayPrefSelect(){
-  const sel = document.getElementById("todayPrefSelect");
-  if(!sel) return;
-
-  const set = new Set();
-  stores.forEach(s=>{
-    const p = (s.pref||"").trim();
-    if(p) set.add(p);
-  });
-  const prefs = Array.from(set).sort((a,b)=>a.localeCompare(b,'ja'));
-  const cur = sel.value || "__ALL__";
-
-  sel.innerHTML = "";
-  sel.innerHTML += `<option value="__ALL__">（全都道府県）</option>`;
-  prefs.forEach(p=>{
-    sel.innerHTML += `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`;
-  });
-
-  if(Array.from(sel.options).some(o=>o.value===cur)) sel.value=cur;
-  else sel.value="__ALL__";
-}
-function bulkSetTodayByPref(prefValue, on){
-  const pref = (prefValue||"__ALL__");
-  stores.forEach(s=>{
-    if(pref==="__ALL__" || (s.pref||"").trim()===pref){
-      s.today = !!on;
-    }
-  });
-  saveAll();
-  render();
-  renderTodayPlan();
-}
-function todayBulkOn(){
-  const pref = document.getElementById("todayPrefSelect").value;
-  bulkSetTodayByPref(pref, true);
-}
-function todayBulkOff(){
-  const pref = document.getElementById("todayPrefSelect").value;
-  bulkSetTodayByPref(pref, false);
-}
-function todayBulkClearAll(){
-  bulkSetTodayByPref("__ALL__", false);
 }
 
 function render(){
@@ -877,8 +812,8 @@ function render(){
       const catSum = categorySummary(s);
 
       const addressBlock = (s.address||"").trim()
-  ? `<div class="addrRow"><div class="mini addrText">住所：${escapeHtml(s.address.trim())}</div><button class="secondary addrCopyBtn" onclick="copyAddress(${i})">住所コピー</button></div>`
-  : "";
+        ? `<div class="addrRow"><div class="mini addrText">住所：${escapeHtml(s.address.trim())}</div><button class="secondary" style="width:auto;white-space:nowrap;" onclick="copyAddress(${i})">住所コピー</button></div>`
+        : "";
 
       const header = `
         <div class="storeTitle">${escapeHtml(s.name)}</div>
@@ -1122,185 +1057,9 @@ function buildTodayRoute(){
 
       area.innerHTML = html;
     },
-    ()=>{
-      alert("位置情報が取得できませんでした。");
-    },
+    ()=>{ alert("位置情報が取得できませんでした。"); },
     {enableHighAccuracy:true, timeout:10000}
   );
-}
-
-function setReportThisMonth(){
-  document.getElementById("reportMonth").value = tokyoMonthStr();
-  renderReport();
-}
-function setReportLastMonth(){
-  document.getElementById("reportMonth").value = addMonths(tokyoMonthStr(), -1);
-  renderReport();
-}
-function monthRangeDates(month){
-  const dim = daysInMonth(month);
-  const dates = [];
-  for(let d=1; d<=dim; d++){
-    dates.push(`${month}-${String(d).padStart(2,'0')}`);
-  }
-  return dates;
-}
-function sumLogsByDate(dates){
-  const map = new Map();
-  dates.forEach(d=>map.set(d,{visit:0,success:0,items:0,profit:0}));
-  logs.forEach(l=>{
-    if(!map.has(l.date)) return;
-    const row = map.get(l.date);
-    if(l.type==="visit") row.visit += l.delta;
-    if(l.type==="success") row.success += l.delta;
-    if(l.type==="items") row.items += l.delta;
-    if(l.type==="profit") row.profit += l.delta;
-  });
-  return map;
-}
-function sumLogsByMonth(months){
-  const map = new Map();
-  months.forEach(m=>map.set(m,{visit:0,success:0,items:0,profit:0}));
-  logs.forEach(l=>{
-    const m = l.date.slice(0,7);
-    if(!map.has(m)) return;
-    const row = map.get(m);
-    if(l.type==="visit") row.visit += l.delta;
-    if(l.type==="success") row.success += l.delta;
-    if(l.type==="items") row.items += l.delta;
-    if(l.type==="profit") row.profit += l.delta;
-  });
-  return map;
-}
-function categoryTotalsForDates(dateSet){
-  const totals = new Map();
-  logs.forEach(l=>{
-    if(l.type!=="items") return;
-    if(!l.category) return;
-    if(!dateSet.has(l.date)) return;
-    const cat = String(l.category).trim();
-    if(!cat) return;
-    totals.set(cat, (totals.get(cat)||0) + (Number(l.delta)||0));
-  });
-  for(const [k,v] of Array.from(totals.entries())){
-    if(v<=0) totals.delete(k);
-  }
-  return Array.from(totals.entries()).sort((a,b)=>b[1]-a[1]);
-}
-function categoryTotalsForMonths(monthSet){
-  const totals = new Map();
-  logs.forEach(l=>{
-    if(l.type!=="items") return;
-    if(!l.category) return;
-    const m = l.date.slice(0,7);
-    if(!monthSet.has(m)) return;
-    const cat = String(l.category).trim();
-    if(!cat) return;
-    totals.set(cat, (totals.get(cat)||0) + (Number(l.delta)||0));
-  });
-  for(const [k,v] of Array.from(totals.entries())){
-    if(v<=0) totals.delete(k);
-  }
-  return Array.from(totals.entries()).sort((a,b)=>b[1]-a[1]);
-}
-function renderCategoryReportBlock(title, rows){
-  if(rows.length===0){
-    return `<div class="gray" style="margin-top:10px;">${escapeHtml(title)}：データなし（個数＋でカテゴリを選ぶと貯まります）</div>`;
-  }
-  const total = rows.reduce((s,r)=>s+r[1],0);
-  const top = rows.slice(0,20);
-  return `
-    <div class="sectionTitle">${escapeHtml(title)}</div>
-    <div class="kv">
-      <div class="pill"><b>カテゴリ数</b> ${rows.length}</div>
-      <div class="pill"><b>合計個数</b> ${total}</div>
-      <div class="pill"><b>TOP</b> ${escapeHtml(top[0][0])}（${top[0][1]}）</div>
-    </div>
-    <table>
-      <thead><tr><th>カテゴリ</th><th>個数</th></tr></thead>
-      <tbody>
-        ${top.map(([cat,cnt])=>`<tr><td>${escapeHtml(cat)}</td><td>${cnt}</td></tr>`).join("")}
-      </tbody>
-    </table>
-    <div class="mini">※ 上位20カテゴリのみ表示</div>
-  `;
-}
-
-function renderReport(){
-  const mode = document.getElementById("reportMode").value;
-  const month = document.getElementById("reportMonth").value || tokyoMonthStr();
-  document.getElementById("reportMonth").value = month;
-
-  const area = document.getElementById("reportArea");
-  area.innerHTML = "";
-
-  if(mode==="daily"){
-    const dates = monthRangeDates(month);
-    const map = sumLogsByDate(dates);
-
-    let tV=0,tS=0,tI=0,tP=0;
-    dates.forEach(d=>{
-      const r = map.get(d);
-      tV+=r.visit; tS+=r.success; tI+=r.items; tP+=r.profit;
-    });
-
-    const dateSet = new Set(dates);
-    const catRows = categoryTotalsForDates(dateSet);
-
-    area.innerHTML = `
-      <div class="kv">
-        <div class="pill"><b>対象月</b> ${escapeHtml(month)}</div>
-        <div class="pill"><b>訪問</b> ${tV}</div>
-        <div class="pill"><b>成功</b> ${tS}</div>
-        <div class="pill"><b>個数</b> ${tI}</div>
-        <div class="pill"><b>利益</b> ${Number(tP).toLocaleString()}円</div>
-      </div>
-      <table>
-        <thead><tr><th>日付</th><th>訪問</th><th>成功</th><th>個数</th><th>利益</th></tr></thead>
-        <tbody>
-          ${dates.map(d=>{
-            const r = map.get(d);
-            return `<tr><td>${escapeHtml(d)}</td><td>${r.visit}</td><td>${r.success}</td><td>${r.items}</td><td>${Number(r.profit).toLocaleString()}円</td></tr>`;
-          }).join("")}
-        </tbody>
-      </table>
-      ${renderCategoryReportBlock("カテゴリ別仕入れ個数（選択月）", catRows)}
-    `;
-    return;
-  }
-
-  const months = [];
-  for(let i=11;i>=0;i--) months.push(addMonths(month, -i));
-  const map = sumLogsByMonth(months);
-
-  let tV=0,tS=0,tI=0,tP=0;
-  months.forEach(m=>{
-    const r = map.get(m);
-    tV+=r.visit; tS+=r.success; tI+=r.items; tP+=r.profit;
-  });
-
-  const monthSet = new Set(months);
-  const catRows = categoryTotalsForMonths(monthSet);
-
-  area.innerHTML = `
-    <div class="kv">
-      <div class="pill"><b>基準月</b> ${escapeHtml(month)}</div>
-      <div class="pill"><b>12ヶ月訪問</b> ${tV}</div>
-      <div class="pill"><b>12ヶ月成功</b> ${tS}</div>
-      <div class="pill"><b>12ヶ月個数</b> ${tI}</div>
-      <div class="pill"><b>12ヶ月利益</b> ${Number(tP).toLocaleString()}円</div>
-    </div>
-    <table>
-      <thead><tr><th>月</th><th>訪問</th><th>成功</th><th>個数</th><th>利益</th></tr></thead>
-      <tbody>
-        ${months.map(m=>{
-          const r = map.get(m);
-          return `<tr><td>${escapeHtml(m)}</td><td>${r.visit}</td><td>${r.success}</td><td>${r.items}</td><td>${Number(r.profit).toLocaleString()}円</td></tr>`;
-        }).join("")}
-      </tbody>
-    </table>
-    ${renderCategoryReportBlock("カテゴリ別仕入れ個数（直近12ヶ月合計）", catRows)}
-  `;
 }
 
 function updateBtnStyle(){
@@ -1343,25 +1102,10 @@ function applyBtnSettingVisibility(){
   document.getElementById("toggleBtnSettingBtn").textContent = visible ? "非表示" : "表示";
 }
 
-function toggleReport(){
-  const cur = localStorage.getItem(KEY_REPORT_VISIBLE);
-  const next = (cur === "0") ? "1" : "0";
-  localStorage.setItem(KEY_REPORT_VISIBLE, next);
-  applyReportVisibility();
-}
-function applyReportVisibility(){
-  const visible = (localStorage.getItem(KEY_REPORT_VISIBLE) ?? "1") !== "0";
-  document.getElementById("reportWrap").style.display = visible ? "block" : "none";
-  document.getElementById("toggleReportBtn").textContent = visible ? "非表示" : "表示";
-}
-
 (function init(){
-  document.getElementById("reportMonth").value = tokyoMonthStr();
   loadBtnStyle();
   applyBtnSettingVisibility();
-  applyReportVisibility();
   render();
-  renderReport();
   renderTodayPlan();
 })();
 </script>
