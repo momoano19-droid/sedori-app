@@ -52,13 +52,17 @@ th{
   border-radius:999px;
   font-size:13px;
 }
-button, select{
+button, select, input{
   width:100%;
   padding:10px;
   font-size:16px;
   border:none;
   border-radius:10px;
   box-sizing:border-box;
+}
+input{
+  border:1px solid #d9e0ea;
+  background:#fff;
 }
 button{
   background:#007aff;
@@ -88,6 +92,10 @@ button.secondary{
 .badge.hot{background:#ff4d4f;color:#fff;}
 .badge.mid{background:#faad14;color:#fff;}
 .badge.cold{background:#597ef7;color:#fff;}
+.gray{
+  color:#666;
+  font-size:13px;
+}
 </style>
 </head>
 
@@ -98,17 +106,32 @@ button.secondary{
 <div class="card">
   <div class="row2">
     <button class="secondary" onclick="location.href='index.html'">← 店舗管理に戻る</button>
-    <select id="monthSelect"></select>
+    <select id="modeSelect"></select>
   </div>
+
+  <div class="row2">
+    <input id="monthInput" type="month">
+    <input id="dateInput" type="date" style="display:none;">
+  </div>
+
   <div class="row2">
     <select id="prefSelect"></select>
     <button class="secondary" onclick="render()">再表示</button>
   </div>
+
+  <div class="gray" style="margin-top:8px;">
+    月表示では月間集計、日表示ではその日の集計を表示します。
+  </div>
 </div>
 
 <div class="card">
-  <h2>月間サマリー</h2>
+  <h2>サマリー</h2>
   <div id="summary" class="kv"></div>
+</div>
+
+<div class="card">
+  <h2>カテゴリ集計</h2>
+  <table id="categoryTable"></table>
 </div>
 
 <div class="card">
@@ -145,12 +168,25 @@ button.secondary{
 const stores = JSON.parse(localStorage.getItem("stores")||"[]");
 const logs = JSON.parse(localStorage.getItem("logs")||"[]");
 
+function todayStr(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+function thisMonthStr(){
+  return todayStr().slice(0,7);
+}
+
 function monthList(){
   const set=new Set();
   logs.forEach(l=>{
     if(l.date) set.add(l.date.slice(0,7));
   });
-  return [...set].sort().reverse();
+  const arr = [...set].sort().reverse();
+  if(arr.length===0) arr.push(thisMonthStr());
+  return arr;
 }
 
 function prefList(){
@@ -162,56 +198,65 @@ function prefList(){
   return [...set].sort((a,b)=>a.localeCompare(b,"ja"));
 }
 
-function initMonth(){
-  const sel=document.getElementById("monthSelect");
-  const months=monthList();
+function initControls(){
+  const modeSel = document.getElementById("modeSelect");
+  modeSel.innerHTML = `
+    <option value="monthly">月表示</option>
+    <option value="daily">日表示</option>
+  `;
 
-  if(months.length===0){
-    const now = new Date();
-    const m = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
-    months.push(m);
-  }
+  const monthInput = document.getElementById("monthInput");
+  const dateInput = document.getElementById("dateInput");
 
-  months.forEach(m=>{
-    const opt=document.createElement("option");
-    opt.value=m;
-    opt.textContent=m;
-    sel.appendChild(opt);
-  });
+  const months = monthList();
+  monthInput.value = months[0] || thisMonthStr();
+  dateInput.value = todayStr();
 
-  sel.onchange=render;
-}
+  modeSel.onchange = ()=>{
+    syncModeUI();
+    render();
+  };
+  monthInput.onchange = render;
+  dateInput.onchange = render;
 
-function initPref(){
-  const sel = document.getElementById("prefSelect");
-  const prefs = prefList();
-
-  sel.innerHTML = `<option value="__ALL__">全都道府県</option>`;
-  prefs.forEach(p=>{
+  const prefSel = document.getElementById("prefSelect");
+  prefSel.innerHTML = `<option value="__ALL__">全都道府県</option>`;
+  prefList().forEach(p=>{
     const opt = document.createElement("option");
     opt.value = p;
     opt.textContent = p;
-    sel.appendChild(opt);
+    prefSel.appendChild(opt);
   });
+  prefSel.onchange = render;
 
-  sel.onchange = render;
+  syncModeUI();
 }
 
-function calcMonth(month){
-  let visit=0;
-  let success=0;
-  let items=0;
-  let profit=0;
+function syncModeUI(){
+  const mode = document.getElementById("modeSelect").value;
+  document.getElementById("monthInput").style.display = mode==="monthly" ? "block" : "none";
+  document.getElementById("dateInput").style.display = mode==="daily" ? "block" : "none";
+}
+
+function calcPeriod(mode, value){
+  let visit=0, success=0, items=0, profit=0;
 
   logs.forEach(l=>{
-    if(!l.date || !l.date.startsWith(month)) return;
-    if(l.type==="visit") visit+=l.delta;
-    if(l.type==="success") success+=l.delta;
-    if(l.type==="items") items+=l.delta;
-    if(l.type==="profit") profit+=l.delta;
+    if(!l.date) return;
+
+    const hit = mode==="monthly"
+      ? l.date.startsWith(value)
+      : l.date === value;
+
+    if(!hit) return;
+
+    if(l.type==="visit") visit += l.delta;
+    if(l.type==="success") success += l.delta;
+    if(l.type==="items") items += l.delta;
+    if(l.type==="profit") profit += l.delta;
   });
 
-  return {visit,success,items,profit};
+  return {visit, success, items, profit};
 }
 
 function calcStoreStats(prefFilter="__ALL__"){
@@ -251,23 +296,65 @@ function judgeStore(s){
   return {label:"❌ 行かなくていい店舗", cls:"cold", row:"statusCold"};
 }
 
-function renderSummary(month, stats, prefFilter){
-  const m=calcMonth(month);
-  const avgItems=m.success ? (m.items/m.success).toFixed(2) : 0;
-  const successRate=m.visit ? ((m.success/m.visit)*100).toFixed(1) : 0;
+function categoryTotals(mode, value){
+  const map = new Map();
+
+  logs.forEach(l=>{
+    if(l.type !== "items") return;
+    if(!l.category) return;
+
+    const hit = mode==="monthly"
+      ? l.date && l.date.startsWith(value)
+      : l.date === value;
+
+    if(!hit) return;
+
+    const cat = String(l.category).trim();
+    if(!cat) return;
+
+    map.set(cat, (map.get(cat) || 0) + (Number(l.delta) || 0));
+  });
+
+  return [...map.entries()]
+    .filter(([,count])=>count>0)
+    .sort((a,b)=>b[1]-a[1]);
+}
+
+function renderCategoryTable(mode, value){
+  const rows = categoryTotals(mode, value);
+  let html = `<tr><th>カテゴリ</th><th>個数</th></tr>`;
+
+  if(rows.length===0){
+    html += `<tr><td colspan="2">データなし</td></tr>`;
+  }else{
+    rows.forEach(([cat, count])=>{
+      html += `<tr><td>${cat}</td><td>${count}</td></tr>`;
+    });
+  }
+
+  document.getElementById("categoryTable").innerHTML = html;
+}
+
+function renderSummary(mode, value, stats, prefFilter){
+  const m = calcPeriod(mode, value);
+  const avgItems = m.success ? (m.items/m.success).toFixed(2) : 0;
+  const successRate = m.visit ? ((m.success/m.visit)*100).toFixed(1) : 0;
 
   const expectedSum = stats.reduce((sum,s)=>sum+s.expected,0);
   const expectedAvg = stats.length ? expectedSum / stats.length : 0;
 
+  const label = mode==="monthly" ? "対象月" : "対象日";
+
   document.getElementById("summary").innerHTML=`
     <div class="pill">表示範囲 ${prefFilter==="__ALL__" ? "全都道府県" : prefFilter}</div>
+    <div class="pill">${label} ${value}</div>
     <div class="pill">登録店舗 ${stats.length}件</div>
     <div class="pill">訪問 ${m.visit}</div>
     <div class="pill">成功 ${m.success}</div>
     <div class="pill">仕入れ個数 ${m.items}</div>
     <div class="pill">利益 ${m.profit.toLocaleString()}円</div>
-    <div class="pill">月間の店舗平均仕入れ個数 ${avgItems}</div>
-    <div class="pill">月間の仕入れ成功確率 ${successRate}%</div>
+    <div class="pill">${mode==="monthly" ? "月間" : "当日"}の店舗平均仕入れ個数 ${avgItems}</div>
+    <div class="pill">${mode==="monthly" ? "月間" : "当日"}の仕入れ成功確率 ${successRate}%</div>
     <div class="pill">期待値合計 ${Math.round(expectedSum).toLocaleString()}円</div>
     <div class="pill">平均期待値 ${Math.round(expectedAvg).toLocaleString()}円</div>
   `;
@@ -356,11 +443,16 @@ function tableRender(id,data,field){
 }
 
 function render(){
-  const month=document.getElementById("monthSelect").value;
+  const mode = document.getElementById("modeSelect").value;
+  const value = mode==="monthly"
+    ? document.getElementById("monthInput").value
+    : document.getElementById("dateInput").value;
+
   const prefFilter=document.getElementById("prefSelect").value;
   const stats=calcStoreStats(prefFilter);
 
-  renderSummary(month, stats, prefFilter);
+  renderSummary(mode, value, stats, prefFilter);
+  renderCategoryTable(mode, value);
   renderPrefExpectedTable();
   renderJudgeTable(stats);
 
@@ -383,8 +475,7 @@ function render(){
   );
 }
 
-initMonth();
-initPref();
+initControls();
 render();
 </script>
 
