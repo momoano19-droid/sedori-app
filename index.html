@@ -72,7 +72,7 @@
   }
 
   .overlay{position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,0.35); display:none; align-items:center; justify-content:center; padding:16px; z-index:9999;}
-  .modal{background:#fff; border-radius:14px; max-width:520px; width:100%; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,0.25);}
+  .modal{background:#fff; border-radius:14px; max-width:560px; width:100%; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,0.25);}
   .modal h2{margin:0 0 6px 0; font-size:18px;}
   .modal .small{color:#666; font-size:13px; margin:0 0 10px 0; line-height:1.4;}
   .chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;}
@@ -86,6 +86,22 @@
   .chip.primary{background:#007aff; color:#fff; border-color:#007aff;}
   .chip.gray{background:#f0f3f8; color:#444;}
   .chip.neutral{background:#34c759; color:#fff; border-color:#34c759;}
+
+  .allocBox{
+    background:#f7f9fc;
+    border-radius:10px;
+    padding:10px;
+    margin-top:10px;
+  }
+  .allocLine{
+    display:flex;
+    justify-content:space-between;
+    gap:8px;
+    padding:4px 0;
+    border-bottom:1px solid #e8edf5;
+    font-size:14px;
+  }
+  .allocLine:last-child{border-bottom:none;}
 </style>
 </head>
 
@@ -99,7 +115,6 @@
 
 <input id="address" placeholder="住所（任意：入れるとマーク表示）">
 <input id="mapUrl" placeholder="GoogleマップURL（Safariで開いた長いURLを貼る）">
-<input id="defaultCategory" placeholder="デフォルトカテゴリ（例：本 / 家電）">
 <button onclick="addStore()">店舗追加</button>
 
 <div class="toolbar">
@@ -145,6 +160,7 @@
 
   <div class="gray">
     ※ 個数＋ を押すと「成功」も自動で +1 されます。<br>
+    ※ 個数入力後、カテゴリは複数に分けて登録できます。<br>
     ※ GoogleマップURLは「共有リンクをSafariで開いた後の長いURL」を貼ると座標が取れます。<br>
     ※ 「📍近くの店舗（3km）」で現在地から3km以内の店舗を最上段表示します。
   </div>
@@ -199,14 +215,19 @@
 
 <div id="overlay" class="overlay" onclick="event.stopPropagation()">
   <div class="modal" onclick="event.stopPropagation()">
-    <h2 id="modalTitle">カテゴリ選択</h2>
+    <h2 id="modalTitle">カテゴリ配分</h2>
     <p id="modalHint" class="small"></p>
 
-    <div id="chipArea" class="chips"></div>
+    <div class="chips" id="chipArea"></div>
 
     <div class="row2" style="margin-top:10px;">
       <input id="customCat" placeholder="その他：カテゴリを手入力">
       <button class="secondary" onclick="addCustomCategory()">追加</button>
+    </div>
+
+    <div class="allocBox">
+      <div id="allocStatus" class="small"></div>
+      <div id="allocSummary"></div>
     </div>
 
     <div class="row2" style="margin-top:10px;">
@@ -362,19 +383,102 @@ function categorySummary(s){
   return `（${top.join(" / ")}${more}）`;
 }
 
-let modalState = {open:false, storeIndex:null, deltaItems:0, selectedCat:""};
+let modalState = {
+  open:false,
+  storeIndex:null,
+  deltaItems:0,
+  allocations:[],
+  addSuccess:false
+};
 
-function openCategoryModal(storeIndex, deltaItems, title){
+function allocAbsTotal(){
+  return Math.abs(modalState.deltaItems || 0);
+}
+function allocAssigned(){
+  return modalState.allocations.reduce((sum,a)=>sum + (Number(a.count)||0), 0);
+}
+function allocRemaining(){
+  return allocAbsTotal() - allocAssigned();
+}
+function upsertAllocation(cat, count){
+  const key = String(cat || "").trim();
+  const n = clampNonNeg(count);
+  const idx = modalState.allocations.findIndex(a => a.cat === key);
+  if(n <= 0){
+    if(idx >= 0) modalState.allocations.splice(idx,1);
+    return;
+  }
+  if(idx >= 0) modalState.allocations[idx].count = n;
+  else modalState.allocations.push({cat:key, count:n});
+}
+function labelCat(cat){
+  return cat ? cat : "カテゴリなし";
+}
+function rebuildAllocSummary(){
+  const status = document.getElementById("allocStatus");
+  const summary = document.getElementById("allocSummary");
+  const total = allocAbsTotal();
+  const assigned = allocAssigned();
+  const remaining = allocRemaining();
+
+  status.innerHTML = `
+    合計: <b>${total}</b> / 割当済み: <b>${assigned}</b> / 残り: <b>${remaining}</b>
+  `;
+
+  if(modalState.allocations.length === 0){
+    summary.innerHTML = `<div class="small">まだカテゴリ配分がありません。</div>`;
+    return;
+  }
+
+  summary.innerHTML = modalState.allocations.map(a => `
+    <div class="allocLine">
+      <div>${escapeHtml(labelCat(a.cat))}</div>
+      <div>${a.count}</div>
+    </div>
+  `).join("");
+}
+function promptAllocation(cat){
+  const key = String(cat || "").trim();
+  const existing = modalState.allocations.find(a => a.cat === key);
+  const current = existing ? existing.count : 0;
+  const max = allocRemaining() + current;
+  const label = labelCat(key);
+
+  const input = prompt(`「${label}」に何個入れますか？\n残り割当可能: ${max}\n0で削除`, String(current || Math.max(1, max)));
+  if(input === null) return;
+
+  const n = clampNonNeg(parseInt(input,10));
+  if(n > max){
+    alert(`割り当てできるのは最大 ${max} 個です。`);
+    return;
+  }
+
+  upsertAllocation(key, n);
+
+  const s = stores[modalState.storeIndex];
+  if(key){
+    if(!s.quickCategories) s.quickCategories = [];
+    if(!s.quickCategories.includes(key)){
+      s.quickCategories.unshift(key);
+      s.quickCategories = s.quickCategories.slice(0, QUICK_LIMIT);
+    }
+  }
+
+  rebuildAllocSummary();
+}
+function openCategoryModal(storeIndex, deltaItems, title, addSuccess=false){
   const s = stores[storeIndex];
   modalState.open = true;
   modalState.storeIndex = storeIndex;
   modalState.deltaItems = deltaItems;
-  modalState.selectedCat = s.defaultCategory || "";
+  modalState.allocations = [];
+  modalState.addSuccess = !!addSuccess;
 
   document.getElementById("modalTitle").textContent = title;
-  document.getElementById("modalHint").textContent = `店舗：${s.name} / 個数：${deltaItems}（ボタンで選択。無ければ下で追加）`;
+  document.getElementById("modalHint").textContent = `店舗：${s.name} / 個数：${Math.abs(deltaItems)}（複数カテゴリに分けて登録できます）`;
   document.getElementById("customCat").value = "";
   rebuildChips();
+  rebuildAllocSummary();
 
   document.getElementById("overlay").style.display = "flex";
 }
@@ -394,31 +498,28 @@ function rebuildChips(){
     if(!chips.includes(c)) chips.push(c);
   });
 
-  if(modalState.selectedCat && !chips.includes(modalState.selectedCat)){
-    chips.unshift(modalState.selectedCat);
-  }
-
   chips.slice(0, CHIP_LIMIT).forEach(cat=>{
+    const assigned = modalState.allocations.find(a => a.cat === cat);
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "chip" + (cat===modalState.selectedCat ? " primary" : "");
-    btn.textContent = cat;
-    btn.onclick = () => { modalState.selectedCat = cat; rebuildChips(); };
+    btn.className = "chip" + (assigned ? " primary" : "");
+    btn.textContent = assigned ? `${cat} (${assigned.count})` : cat;
+    btn.onclick = () => promptAllocation(cat);
     area.appendChild(btn);
   });
 
+  const noneAssigned = modalState.allocations.find(a => a.cat === "");
   const noneBtn = document.createElement("button");
   noneBtn.type="button";
-  noneBtn.className = "chip gray" + (!modalState.selectedCat ? " primary" : "");
-  noneBtn.textContent = "カテゴリなし";
-  noneBtn.onclick = () => { modalState.selectedCat = ""; rebuildChips(); };
+  noneBtn.className = "chip gray" + (noneAssigned ? " primary" : "");
+  noneBtn.textContent = noneAssigned ? `カテゴリなし (${noneAssigned.count})` : "カテゴリなし";
+  noneBtn.onclick = () => promptAllocation("");
   area.appendChild(noneBtn);
 }
 function addCustomCategory(){
   const v = document.getElementById("customCat").value.trim();
   if(!v) return;
 
-  modalState.selectedCat = v;
   const s = stores[modalState.storeIndex];
   if(!s.quickCategories) s.quickCategories=[];
   if(!s.quickCategories.includes(v)){
@@ -427,22 +528,40 @@ function addCustomCategory(){
   }
   document.getElementById("customCat").value = "";
   rebuildChips();
+  promptAllocation(v);
+  rebuildChips();
 }
 function closeModal(commit){
   document.getElementById("overlay").style.display = "none";
   modalState.open = false;
   if(!commit) return;
 
-  const i = modalState.storeIndex;
-  const delta = modalState.deltaItems;
-  const cat = modalState.selectedCat;
-  const s = stores[i];
-
-  if(delta !== 0){
-    s.items = clampNonNeg(s.items + delta);
-    if(cat) addItemsToCategory(i, cat, delta);
-    addLog(s.id, "items", delta, cat || null);
+  const total = allocAbsTotal();
+  const assigned = allocAssigned();
+  if(assigned !== total){
+    alert(`カテゴリ配分の合計を ${total} 個にしてください。`);
+    document.getElementById("overlay").style.display = "flex";
+    modalState.open = true;
+    return;
   }
+
+  const i = modalState.storeIndex;
+  const s = stores[i];
+  const sign = modalState.deltaItems >= 0 ? 1 : -1;
+
+  if(modalState.addSuccess){
+    s.buyDays++;
+    if(s.buyDays > s.visits) s.visits = s.buyDays;
+    addLog(s.id, "success", 1);
+  }
+
+  modalState.allocations.forEach(a=>{
+    const delta = a.count * sign;
+    s.items = clampNonNeg(s.items + delta);
+    if(a.cat) addItemsToCategory(i, a.cat, delta);
+    addLog(s.id, "items", delta, a.cat || null);
+  });
+
   saveAll();
   render();
 }
@@ -452,7 +571,6 @@ function addStore(){
   const pref = document.getElementById("prefName").value.trim();
   const address = document.getElementById("address").value.trim();
   const url = document.getElementById("mapUrl").value.trim();
-  const dc = document.getElementById("defaultCategory").value.trim();
   if(!name) return;
 
   let lat=null, lng=null;
@@ -465,17 +583,14 @@ function addStore(){
     lat=c.lat; lng=c.lng;
   }
 
-  const quick = [];
-  if(dc) quick.push(dc);
-
   stores.push({
     id: ensureId(),
     name, pref, address,
     visits:0, buyDays:0, items:0, profit:0,
     mapUrl:url, lat, lng,
-    defaultCategory: dc,
+    defaultCategory: "",
     categoryCounts:{},
-    quickCategories: quick,
+    quickCategories: [],
     lastVisitDate:"",
     today:false
   });
@@ -484,7 +599,6 @@ function addStore(){
   document.getElementById("prefName").value="";
   document.getElementById("address").value="";
   document.getElementById("mapUrl").value="";
-  document.getElementById("defaultCategory").value="";
 
   saveAll();
   clearNearbyMode();
@@ -509,9 +623,6 @@ function editStore(i){
   const newUrl = prompt("GoogleマップURL", (s.mapUrl||"").trim());
   if(newUrl===null) return;
 
-  const newDefaultCat = prompt("デフォルトカテゴリ", (s.defaultCategory||"").trim());
-  if(newDefaultCat===null) return;
-
   const newQuick = prompt("よく使うカテゴリ（/区切り）", (s.quickCategories||[]).join("/"));
   if(newQuick===null) return;
 
@@ -533,7 +644,6 @@ function editStore(i){
   s.address = String(newAddr).trim();
   s.mapUrl = urlTrim;
   s.lat = lat; s.lng = lng;
-  s.defaultCategory = String(newDefaultCat).trim();
   s.quickCategories = String(newQuick).split("/").map(x=>x.trim()).filter(Boolean).slice(0, QUICK_LIMIT);
 
   saveAll();
@@ -609,13 +719,7 @@ function itemsPlus(i){
   if(numStr!==null && String(numStr).trim()!==""){
     const n = clampNonNeg(parseInt(numStr,10));
     if(n <= 0) return;
-
-    const s = stores[i];
-    s.buyDays++;
-    if(s.buyDays > s.visits) s.visits = s.buyDays;
-    addLog(s.id, "success", 1);
-
-    openCategoryModal(i, n, "カテゴリ選択（個数＋）");
+    openCategoryModal(i, n, "カテゴリ配分（個数＋）", true);
   }
 }
 function itemsMinus(i){
@@ -623,7 +727,7 @@ function itemsMinus(i){
   if(numStr!==null && String(numStr).trim()!==""){
     const n = clampNonNeg(parseInt(numStr,10));
     if(n <= 0) return;
-    openCategoryModal(i, -n, "カテゴリ選択（個数−）");
+    openCategoryModal(i, -n, "カテゴリ配分（個数−）", false);
   }
 }
 
