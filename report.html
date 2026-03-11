@@ -79,21 +79,92 @@ button.secondary{
 .row2>*{
   flex:1;
 }
-.statusHot{background:#ffe3e3;}
-.statusMid{background:#fff6db;}
-.statusCold{background:#e8f0ff;}
-.badge{
+.gray{
+  color:#666;
+  font-size:13px;
+}
+
+/* 店舗評価カード */
+.judgeWrap{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  margin-top:10px;
+}
+.judgeItem{
+  border-radius:14px;
+  padding:14px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.06);
+}
+.judgeItem.hot{
+  background:#fff1f0;
+  border:1px solid #ffccc7;
+}
+.judgeItem.mid{
+  background:#fffbe6;
+  border:1px solid #ffe58f;
+}
+.judgeItem.cold{
+  background:#f0f5ff;
+  border:1px solid #adc6ff;
+}
+.judgeTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.judgeTitle{
+  font-size:20px;
+  font-weight:800;
+  line-height:1.2;
+  color:#111;
+}
+.judgePref{
+  margin-top:4px;
+  font-size:14px;
+  color:#555;
+  font-weight:600;
+}
+.judgeBadge{
   display:inline-block;
-  padding:3px 8px;
+  padding:4px 10px;
   border-radius:999px;
   font-size:12px;
   font-weight:700;
+  white-space:nowrap;
 }
-.badge.hot{background:#ff4d4f;color:#fff;}
-.badge.mid{background:#faad14;color:#fff;}
-.badge.cold{background:#597ef7;color:#fff;}
-.gray{
-  color:#666;
+.judgeBadge.hot{
+  background:#ff4d4f;
+  color:#fff;
+}
+.judgeBadge.mid{
+  background:#faad14;
+  color:#fff;
+}
+.judgeBadge.cold{
+  background:#597ef7;
+  color:#fff;
+}
+.judgeMain{
+  margin-top:12px;
+  font-size:15px;
+  line-height:1.7;
+  color:#222;
+}
+.judgeStrong{
+  font-weight:800;
+}
+.judgeSub{
+  margin-top:10px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.judgePill{
+  background:rgba(255,255,255,0.7);
+  padding:6px 10px;
+  border-radius:999px;
   font-size:13px;
 }
 </style>
@@ -146,7 +217,7 @@ button.secondary{
     <div class="pill">⚠️ 微妙店舗 = 期待値800〜1999円 or 成功率20〜39.9%</div>
     <div class="pill">❌ 行かなくていい店舗 = 期待値800円未満 かつ 成功率20%未満</div>
   </div>
-  <table id="judgeTable"></table>
+  <div id="judgeCards" class="judgeWrap"></div>
 </div>
 
 <div class="card">
@@ -269,6 +340,7 @@ function calcStoreStats(prefFilter="__ALL__"){
       const visits=s.visits||0;
       const success=s.buyDays||0;
       const profit=s.profit||0;
+      const items=s.items||0;
 
       const rate=visits ? success/visits : 0;
       const avgProfit=success ? profit/success : 0;
@@ -281,19 +353,20 @@ function calcStoreStats(prefFilter="__ALL__"){
         rate:rate*100,
         profit,
         visits,
-        success
+        success,
+        items
       };
     });
 }
 
 function judgeStore(s){
   if(s.expected >= 2000 || s.rate >= 40){
-    return {label:"🔥 行くべき店舗", cls:"hot", row:"statusHot"};
+    return {label:"🔥 行くべき店舗", cls:"hot"};
   }
   if(s.expected >= 800 || s.rate >= 20){
-    return {label:"⚠️ 微妙店舗", cls:"mid", row:"statusMid"};
+    return {label:"⚠️ 微妙店舗", cls:"mid"};
   }
-  return {label:"❌ 行かなくていい店舗", cls:"cold", row:"statusCold"};
+  return {label:"❌ 行かなくていい店舗", cls:"cold"};
 }
 
 function categoryTotals(mode, value){
@@ -397,27 +470,58 @@ function renderPrefExpectedTable(){
   document.getElementById("prefExpectedTable").innerHTML = html;
 }
 
-function renderJudgeTable(stats){
-  let html="<tr><th>店舗</th><th>都道府県</th><th>判定</th><th>期待値</th><th>成功率</th><th>利益</th></tr>";
+function renderJudgeCards(stats){
+  const root = document.getElementById("judgeCards");
 
-  stats
+  if(stats.length===0){
+    root.innerHTML = `<div class="gray">表示できる店舗がありません。</div>`;
+    return;
+  }
+
+  const html = stats
     .slice()
     .sort((a,b)=>b.expected-a.expected)
-    .forEach(s=>{
+    .map(s=>{
       const j = judgeStore(s);
-      html += `
-        <tr class="${j.row}">
-          <td>${s.name}</td>
-          <td>${s.pref}</td>
-          <td><span class="badge ${j.cls}">${j.label}</span></td>
-          <td>${Math.round(s.expected).toLocaleString()}円</td>
-          <td>${s.rate.toFixed(1)}%</td>
-          <td>${s.profit.toLocaleString()}円</td>
-        </tr>
-      `;
-    });
+      return `
+        <div class="judgeItem ${j.cls}">
+          <div class="judgeTop">
+            <div>
+              <div class="judgeTitle">${s.name}</div>
+              <div class="judgePref">${s.pref}</div>
+            </div>
+            <div class="judgeBadge ${j.cls}">${j.label}</div>
+          </div>
 
-  document.getElementById("judgeTable").innerHTML=html;
+          <div class="judgeMain">
+            <span class="judgeStrong">期待値 ${Math.round(s.expected).toLocaleString()}円</span>
+            &nbsp;|&nbsp;
+            <span class="judgeStrong">成功率 ${s.rate.toFixed(1)}%</span>
+          </div>
+
+          <div class="judgeMain">
+            利益 ${s.profit.toLocaleString()}円
+          </div>
+
+          <div class="judgeMain">
+            訪問 ${s.visits}回 / 成功 ${s.success}回
+          </div>
+
+          <div class="judgeMain">
+            仕入れ個数 ${s.items}
+          </div>
+
+          <div class="judgeSub">
+            <div class="judgePill">期待値 ${Math.round(s.expected).toLocaleString()}円</div>
+            <div class="judgePill">成功率 ${s.rate.toFixed(1)}%</div>
+            <div class="judgePill">利益 ${s.profit.toLocaleString()}円</div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  root.innerHTML = html;
 }
 
 function tableRender(id,data,field){
@@ -454,7 +558,7 @@ function render(){
   renderSummary(mode, value, stats, prefFilter);
   renderCategoryTable(mode, value);
   renderPrefExpectedTable();
-  renderJudgeTable(stats);
+  renderJudgeCards(stats);
 
   tableRender(
     "expectedTable",
