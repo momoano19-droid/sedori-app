@@ -66,7 +66,7 @@
   .addrCopyBtn{
     width:auto !important;
     flex:0 0 auto;
-    padding:4px 8px !important;
+    padding:4px 10px !important;
     font-size:12px !important;
     line-height:1.2;
   }
@@ -113,8 +113,8 @@
   <input id="prefName" placeholder="都道府県（例：茨城県）">
 </div>
 
-<input id="address" placeholder="住所（任意：入れるとマーク表示）">
-<input id="mapUrl" placeholder="GoogleマップURL（Safariで開いた長いURLを貼る）">
+<input id="address" placeholder="住所（これだけでもOK：自動で座標取得）">
+<input id="mapUrl" placeholder="Googleマップ共有リンク（任意）">
 <button onclick="addStore()">店舗追加</button>
 
 <div class="toolbar">
@@ -161,7 +161,7 @@
   <div class="gray">
     ※ 個数＋ を押すと「成功」も自動で +1 されます。<br>
     ※ 個数入力後、カテゴリは複数に分けて登録できます。<br>
-    ※ GoogleマップURLは「共有リンクをSafariで開いた後の長いURL」を貼ると座標が取れます。<br>
+    ※ 住所だけでも座標取得できます。Googleマップ共有リンクは任意です。<br>
     ※ 「📍近くの店舗（3km）」で現在地から3km以内の店舗を最上段表示します。
   </div>
 </div>
@@ -344,6 +344,42 @@ function extractLatLng(url){
   return null;
 }
 
+async function geocodeAddress(address){
+  const q = String(address || "").trim();
+  if(!q) return null;
+
+  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(q)}`;
+  const res = await fetch(endpoint, {
+    headers: {
+      "Accept": "application/json"
+    }
+  });
+
+  if(!res.ok) throw new Error("geocode_failed");
+  const data = await res.json();
+  if(!Array.isArray(data) || data.length===0) return null;
+
+  return {
+    lat: parseFloat(data[0].lat),
+    lng: parseFloat(data[0].lon)
+  };
+}
+
+async function resolveLatLng(url, address){
+  const trimmedUrl = String(url || "").trim();
+  if(trimmedUrl){
+    const c = extractLatLng(trimmedUrl);
+    if(c) return c;
+  }
+
+  const trimmedAddress = String(address || "").trim();
+  if(trimmedAddress){
+    return await geocodeAddress(trimmedAddress);
+  }
+
+  return {lat:null, lng:null};
+}
+
 function addItemsToCategory(i, cat, delta){
   const s = stores[i];
   const category = String(cat||"").trim();
@@ -465,6 +501,7 @@ function promptAllocation(cat){
   }
 
   rebuildAllocSummary();
+  rebuildChips();
 }
 function openCategoryModal(storeIndex, deltaItems, title, addSuccess=false){
   const s = stores[storeIndex];
@@ -566,7 +603,7 @@ function closeModal(commit){
   render();
 }
 
-function addStore(){
+async function addStore(){
   const name = document.getElementById("storeName").value.trim();
   const pref = document.getElementById("prefName").value.trim();
   const address = document.getElementById("address").value.trim();
@@ -574,13 +611,19 @@ function addStore(){
   if(!name) return;
 
   let lat=null, lng=null;
-  if(url){
-    const c = extractLatLng(url);
-    if(!c){
-      alert("URLから座標が取れませんでした。");
-      return;
-    }
-    lat=c.lat; lng=c.lng;
+
+  try{
+    const resolved = await resolveLatLng(url, address);
+    lat = resolved?.lat ?? null;
+    lng = resolved?.lng ?? null;
+  }catch(e){
+    alert("住所から座標を取得できませんでした。ネット接続を確認して、住所をもう少し詳しく入れてください。");
+    return;
+  }
+
+  if((address || url) && (lat===null || lng===null)){
+    alert("座標を取得できませんでした。住所を詳しく入れるか、Googleマップ共有リンクを入れてください。");
+    return;
   }
 
   stores.push({
@@ -606,7 +649,7 @@ function addStore(){
   renderTodayPlan();
 }
 
-function editStore(i){
+async function editStore(i){
   const s = stores[i];
 
   const newName = prompt("店舗名", s.name || "");
@@ -620,30 +663,35 @@ function editStore(i){
   const newAddr = prompt("住所", (s.address||"").trim());
   if(newAddr===null) return;
 
-  const newUrl = prompt("GoogleマップURL", (s.mapUrl||"").trim());
+  const newUrl = prompt("Googleマップ共有リンク（任意）", (s.mapUrl||"").trim());
   if(newUrl===null) return;
 
   const newQuick = prompt("よく使うカテゴリ（/区切り）", (s.quickCategories||[]).join("/"));
   if(newQuick===null) return;
 
-  let lat=s.lat, lng=s.lng;
-  const urlTrim = String(newUrl).trim();
-  if(urlTrim){
-    const c = extractLatLng(urlTrim);
-    if(!c){
-      alert("URLから座標が取れませんでした。");
-      return;
-    }
-    lat=c.lat; lng=c.lng;
-  } else {
-    lat=null; lng=null;
+  let lat = null;
+  let lng = null;
+
+  try{
+    const resolved = await resolveLatLng(newUrl, newAddr);
+    lat = resolved?.lat ?? null;
+    lng = resolved?.lng ?? null;
+  }catch(e){
+    alert("住所から座標を取得できませんでした。ネット接続を確認して、住所をもう少し詳しく入れてください。");
+    return;
+  }
+
+  if((String(newAddr).trim() || String(newUrl).trim()) && (lat===null || lng===null)){
+    alert("座標を取得できませんでした。住所を詳しく入れるか、Googleマップ共有リンクを入れてください。");
+    return;
   }
 
   s.name = nameTrim;
   s.pref = String(newPref).trim();
   s.address = String(newAddr).trim();
-  s.mapUrl = urlTrim;
-  s.lat = lat; s.lng = lng;
+  s.mapUrl = String(newUrl).trim();
+  s.lat = lat;
+  s.lng = lng;
   s.quickCategories = String(newQuick).split("/").map(x=>x.trim()).filter(Boolean).slice(0, QUICK_LIMIT);
 
   saveAll();
@@ -662,33 +710,22 @@ function deleteStore(i){
   renderTodayPlan();
 }
 
-function copyAddress(i){
-  const addr = (stores[i].address || "").trim();
-  if(!addr){
-    alert("住所が登録されていません。");
+function navigateToStore(i){
+  const s = stores[i];
+
+  if(typeof s.lat === "number" && typeof s.lng === "number"){
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.lat + "," + s.lng)}&travelmode=driving`;
+    window.open(url, "_blank");
     return;
   }
 
-  if(navigator.clipboard && window.isSecureContext){
-    navigator.clipboard.writeText(addr)
-      .then(()=>alert("住所をコピーしました"))
-      .catch(()=>fallbackCopy(addr));
-  } else {
-    fallbackCopy(addr);
+  if((s.address || "").trim()){
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address.trim())}`;
+    window.open(url, "_blank");
+    return;
   }
-}
-function fallbackCopy(text){
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  document.body.appendChild(ta);
-  ta.select();
-  try{
-    document.execCommand("copy");
-    alert("住所をコピーしました");
-  }catch(e){
-    alert("コピーに失敗しました");
-  }
-  document.body.removeChild(ta);
+
+  alert("住所または座標が登録されていません。");
 }
 
 function toggleToday(i, checked){
@@ -897,8 +934,8 @@ function applyLayoutButtonState(){
 }
 
 function buildCardHeader(s, i, extraBadgesHtml=""){
-  const addressBlock = (s.address||"").trim()
-    ? `<div class="addrRow"><div class="mini addrText">住所：${escapeHtml(s.address.trim())}</div><button class="secondary addrCopyBtn" onclick="copyAddress(${i})">住所コピー</button></div>`
+  const addressBlock = ((s.address||"").trim() || (typeof s.lat==="number" && typeof s.lng==="number"))
+    ? `<div class="addrRow"><div class="mini addrText">住所：${escapeHtml((s.address||"").trim() || "未登録")}</div><button class="secondary addrCopyBtn" onclick="navigateToStore(${i})">ナビ</button></div>`
     : "";
 
   return `
