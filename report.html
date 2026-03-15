@@ -167,6 +167,97 @@ button.secondary{
   border-radius:999px;
   font-size:13px;
 }
+
+/* カレンダー */
+.calendarWrap{
+  margin-top:10px;
+}
+.calendarHeader{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:6px;
+  margin-bottom:8px;
+}
+.calendarWeekday{
+  text-align:center;
+  font-size:12px;
+  color:#667;
+  font-weight:700;
+  padding:4px 0;
+}
+.calendarGrid{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:6px;
+}
+.calendarCell{
+  min-height:56px;
+  background:#f8fafc;
+  border:1px solid #edf2f7;
+  border-radius:10px;
+  padding:6px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:flex-start;
+}
+.calendarCell.empty{
+  background:transparent;
+  border:none;
+}
+.calendarDay{
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  font-size:14px;
+  color:#223;
+}
+.calendarDay.normal{
+  background:#ffe58f;
+  color:#4d3b00;
+}
+.calendarDay.big{
+  background:#52c41a;
+  color:#fff;
+}
+.calendarMeta{
+  margin-top:6px;
+  font-size:11px;
+  color:#667;
+  line-height:1.25;
+}
+.calendarLegend{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.legendItem{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  color:#445;
+}
+.legendDot{
+  width:18px;
+  height:18px;
+  border-radius:999px;
+  border:1px solid #d9e2ec;
+  background:#fff;
+}
+.legendDot.normal{
+  background:#ffe58f;
+  border-color:#ffe58f;
+}
+.legendDot.big{
+  background:#52c41a;
+  border-color:#52c41a;
+}
 </style>
 </head>
 
@@ -192,6 +283,16 @@ button.secondary{
 
   <div class="gray" style="margin-top:8px;">
     月表示では月間集計、日表示ではその日の集計を表示します。
+  </div>
+</div>
+
+<div class="card">
+  <h2>月カレンダー</h2>
+  <div class="gray">日付の色だけ変わります。緑 = 大成功日（利益10万円以上）、黄 = 普通（成功あり・利益10万円未満）</div>
+  <div id="calendarArea" class="calendarWrap"></div>
+  <div class="calendarLegend">
+    <div class="legendItem"><span class="legendDot big"></span>大成功日</div>
+    <div class="legendItem"><span class="legendDot normal"></span>普通</div>
   </div>
 </div>
 
@@ -487,8 +588,8 @@ function renderJudgeCards(stats){
         <div class="judgeItem ${j.cls}">
           <div class="judgeTop">
             <div>
-              <div class="judgeTitle">${s.name}</div>
-              <div class="judgePref">${s.pref}</div>
+              <div class="judgeTitle">${escapeHtmlHtml(s.name)}</div>
+              <div class="judgePref">${escapeHtmlHtml(s.pref)}</div>
             </div>
             <div class="judgeBadge ${j.cls}">${j.label}</div>
           </div>
@@ -536,14 +637,92 @@ function tableRender(id,data,field){
     html+=`
       <tr>
         <td>${i+1}</td>
-        <td>${s.name}</td>
-        <td>${s.pref}</td>
+        <td>${escapeHtmlHtml(s.name)}</td>
+        <td>${escapeHtmlHtml(s.pref)}</td>
         <td>${v}</td>
       </tr>
     `;
   });
 
   document.getElementById(id).innerHTML=html;
+}
+
+function calcDayStats(dateStr){
+  let visit = 0;
+  let success = 0;
+  let items = 0;
+  let profit = 0;
+
+  logs.forEach(l=>{
+    if(l.date !== dateStr) return;
+    if(l.type==="visit") visit += l.delta;
+    if(l.type==="success") success += l.delta;
+    if(l.type==="items") items += l.delta;
+    if(l.type==="profit") profit += l.delta;
+  });
+
+  return {visit, success, items, profit};
+}
+
+function renderCalendar(monthValue){
+  const area = document.getElementById("calendarArea");
+  if(!monthValue){
+    area.innerHTML = `<div class="gray">表示する月がありません。</div>`;
+    return;
+  }
+
+  const [year, month] = monthValue.split("-").map(Number);
+  const firstDay = new Date(year, month - 1, 1);
+  const lastDate = new Date(year, month, 0).getDate();
+  const startWeekday = firstDay.getDay(); // 0=Sun
+
+  const weekdays = ["日","月","火","水","木","金","土"];
+
+  let html = `
+    <div class="calendarHeader">
+      ${weekdays.map(d=>`<div class="calendarWeekday">${d}</div>`).join("")}
+    </div>
+    <div class="calendarGrid">
+  `;
+
+  for(let i=0;i<startWeekday;i++){
+    html += `<div class="calendarCell empty"></div>`;
+  }
+
+  for(let day=1; day<=lastDate; day++){
+    const dateStr = `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    const ds = calcDayStats(dateStr);
+
+    let dayClass = "";
+    if(ds.profit >= 100000){
+      dayClass = "big";
+    }else if(ds.success > 0 && ds.profit < 100000){
+      dayClass = "normal";
+    }
+
+    const meta = [];
+    if(ds.profit > 0) meta.push(`¥${ds.profit.toLocaleString()}`);
+    if(ds.success > 0) meta.push(`成功${ds.success}`);
+
+    html += `
+      <div class="calendarCell">
+        <div class="calendarDay ${dayClass}">${day}</div>
+        <div class="calendarMeta">${meta.join("<br>")}</div>
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+  area.innerHTML = html;
+}
+
+function escapeHtmlHtml(str){
+  return String(str)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
 function render(){
@@ -555,6 +734,11 @@ function render(){
   const prefFilter=document.getElementById("prefSelect").value;
   const stats=calcStoreStats(prefFilter);
 
+  const monthForCalendar = mode==="monthly"
+    ? document.getElementById("monthInput").value
+    : document.getElementById("dateInput").value.slice(0,7);
+
+  renderCalendar(monthForCalendar);
   renderSummary(mode, value, stats, prefFilter);
   renderCategoryTable(mode, value);
   renderPrefExpectedTable();
