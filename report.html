@@ -201,10 +201,24 @@ button.secondary{
   align-items:center;
   justify-content:flex-start;
   overflow:hidden;
+  cursor:pointer;
+  transition:transform .08s ease, box-shadow .08s ease, border-color .08s ease;
+}
+.calendarCell:active{
+  transform:scale(0.98);
+}
+.calendarCell:hover{
+  box-shadow:0 2px 6px rgba(0,0,0,0.08);
 }
 .calendarCell.empty{
   background:transparent;
   border:none;
+  cursor:default;
+  box-shadow:none;
+}
+.calendarCell.selected{
+  border-color:#1677ff;
+  box-shadow:0 0 0 2px rgba(22,119,255,0.12);
 }
 .calendarDay{
   width:26px;
@@ -261,6 +275,18 @@ button.secondary{
   background:#52c41a;
   border-color:#52c41a;
 }
+
+/* 日別詳細 */
+.dayDetailTitle{
+  font-size:16px;
+  font-weight:800;
+  color:#223;
+  margin-bottom:6px;
+}
+.dayDetailEmpty{
+  color:#666;
+  font-size:14px;
+}
 </style>
 </head>
 
@@ -291,12 +317,17 @@ button.secondary{
 
 <div class="card">
   <h2>月カレンダー</h2>
-  <div class="gray">日付の色だけ変わります。緑 = 大成功日（利益10万円以上）、黄 = 普通（成功あり・利益10万円未満）</div>
+  <div class="gray">日付をタップするとその日の詳細が表示されます。緑 = 大成功日（利益10万円以上）、黄 = 普通（成功あり・利益10万円未満）</div>
   <div id="calendarArea" class="calendarWrap"></div>
   <div class="calendarLegend">
     <div class="legendItem"><span class="legendDot big"></span>大成功日</div>
     <div class="legendItem"><span class="legendDot normal"></span>普通</div>
   </div>
+</div>
+
+<div class="card">
+  <h2>タップした日の詳細</h2>
+  <div id="dayDetailArea"></div>
 </div>
 
 <div class="card">
@@ -342,6 +373,7 @@ button.secondary{
 <script>
 const stores = JSON.parse(localStorage.getItem("stores")||"[]");
 const logs = JSON.parse(localStorage.getItem("logs")||"[]");
+let selectedCalendarDate = "";
 
 function escapeHtmlHtml(str){
   return String(str)
@@ -395,13 +427,33 @@ function initControls(){
   const months = monthList();
   monthInput.value = months[0] || thisMonthStr();
   dateInput.value = todayStr();
+  selectedCalendarDate = dateInput.value || `${monthInput.value}-01`;
 
   modeSel.onchange = ()=>{
     syncModeUI();
+    if(modeSel.value === "daily"){
+      selectedCalendarDate = document.getElementById("dateInput").value;
+    }else{
+      const month = document.getElementById("monthInput").value;
+      if(!selectedCalendarDate || !selectedCalendarDate.startsWith(month)){
+        selectedCalendarDate = `${month}-01`;
+      }
+    }
     render();
   };
-  monthInput.onchange = render;
-  dateInput.onchange = render;
+
+  monthInput.onchange = ()=>{
+    const month = monthInput.value;
+    if(!selectedCalendarDate || !selectedCalendarDate.startsWith(month)){
+      selectedCalendarDate = `${month}-01`;
+    }
+    render();
+  };
+
+  dateInput.onchange = ()=>{
+    selectedCalendarDate = dateInput.value;
+    render();
+  };
 
   const prefSel = document.getElementById("prefSelect");
   prefSel.innerHTML = `<option value="__ALL__">全都道府県</option>`;
@@ -498,6 +550,24 @@ function categoryTotals(mode, value){
     const cat = String(l.category).trim();
     if(!cat) return;
 
+    map.set(cat, (map.get(cat) || 0) + (Number(l.delta) || 0));
+  });
+
+  return [...map.entries()]
+    .filter(([,count])=>count>0)
+    .sort((a,b)=>b[1]-a[1]);
+}
+
+function dailyCategoryTotals(dateStr){
+  const map = new Map();
+
+  logs.forEach(l=>{
+    if(l.type !== "items") return;
+    if(l.date !== dateStr) return;
+    if(!l.category) return;
+
+    const cat = String(l.category).trim();
+    if(!cat) return;
     map.set(cat, (map.get(cat) || 0) + (Number(l.delta) || 0));
   });
 
@@ -676,6 +746,15 @@ function calcDayStats(dateStr){
   return {visit, success, items, profit};
 }
 
+function selectCalendarDate(dateStr){
+  selectedCalendarDate = dateStr;
+  const mode = document.getElementById("modeSelect").value;
+  if(mode === "daily"){
+    document.getElementById("dateInput").value = dateStr;
+  }
+  render();
+}
+
 function renderCalendar(monthValue){
   const area = document.getElementById("calendarArea");
   if(!monthValue){
@@ -688,6 +767,10 @@ function renderCalendar(monthValue){
   const lastDate = new Date(year, month, 0).getDate();
   const startWeekday = firstDay.getDay();
   const weekdays = ["日","月","火","水","木","金","土"];
+
+  if(!selectedCalendarDate || !selectedCalendarDate.startsWith(monthValue)){
+    selectedCalendarDate = `${monthValue}-01`;
+  }
 
   let html = `
     <div class="calendarHeader">
@@ -714,8 +797,10 @@ function renderCalendar(monthValue){
     const meta = [];
     if(ds.profit > 0) meta.push(`¥${ds.profit.toLocaleString()}`);
 
+    const selectedClass = selectedCalendarDate === dateStr ? "selected" : "";
+
     html += `
-      <div class="calendarCell">
+      <div class="calendarCell ${selectedClass}" onclick="selectCalendarDate('${dateStr}')">
         <div class="calendarDay ${dayClass}">${day}</div>
         <div class="calendarMeta">${meta.join("<br>")}</div>
       </div>
@@ -723,6 +808,47 @@ function renderCalendar(monthValue){
   }
 
   html += `</div>`;
+  area.innerHTML = html;
+}
+
+function renderDayDetail(dateStr){
+  const area = document.getElementById("dayDetailArea");
+  if(!dateStr){
+    area.innerHTML = `<div class="dayDetailEmpty">日付をタップすると詳細が表示されます。</div>`;
+    return;
+  }
+
+  const ds = calcDayStats(dateStr);
+  const catRows = dailyCategoryTotals(dateStr);
+
+  let html = `
+    <div class="dayDetailTitle">${escapeHtmlHtml(dateStr)} の詳細</div>
+    <div class="kv">
+      <div class="pill">訪問 ${ds.visit}</div>
+      <div class="pill">成功 ${ds.success}</div>
+      <div class="pill">仕入れ個数 ${ds.items}</div>
+      <div class="pill">利益 ${ds.profit.toLocaleString()}円</div>
+    </div>
+  `;
+
+  if(catRows.length===0){
+    html += `<div class="gray" style="margin-top:10px;">カテゴリデータなし</div>`;
+  }else{
+    html += `
+      <table>
+        <thead><tr><th>カテゴリ</th><th>個数</th></tr></thead>
+        <tbody>
+          ${catRows.map(([cat,count])=>`
+            <tr>
+              <td>${escapeHtmlHtml(cat)}</td>
+              <td>${count}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
   area.innerHTML = html;
 }
 
@@ -740,6 +866,7 @@ function render(){
     : document.getElementById("dateInput").value.slice(0,7);
 
   renderCalendar(monthForCalendar);
+  renderDayDetail(selectedCalendarDate);
   renderSummary(mode, value, stats, prefFilter);
   renderCategoryTable(mode, value);
   renderPrefExpectedTable();
