@@ -191,29 +191,31 @@ button.secondary{
   gap:6px;
 }
 .calendarCell{
-  min-height:56px;
+  aspect-ratio:1/1;
   background:#f8fafc;
   border:1px solid #edf2f7;
   border-radius:10px;
   padding:6px;
   display:flex;
   flex-direction:column;
-  align-items:flex-start;
+  align-items:center;
   justify-content:flex-start;
+  overflow:hidden;
 }
 .calendarCell.empty{
   background:transparent;
   border:none;
 }
 .calendarDay{
-  width:28px;
-  height:28px;
-  border-radius:999px;
+  width:26px;
+  height:26px;
+  border-radius:50%;
   display:flex;
   align-items:center;
   justify-content:center;
-  font-weight:700;
-  font-size:14px;
+  font-weight:bold;
+  font-size:13px;
+  margin-bottom:4px;
   color:#223;
 }
 .calendarDay.normal{
@@ -222,13 +224,14 @@ button.secondary{
 }
 .calendarDay.big{
   background:#52c41a;
-  color:#fff;
+  color:white;
 }
 .calendarMeta{
-  margin-top:6px;
-  font-size:11px;
-  color:#667;
-  line-height:1.25;
+  font-size:10px;
+  line-height:1.2;
+  text-align:center;
+  color:#666;
+  word-break:break-word;
 }
 .calendarLegend{
   display:flex;
@@ -339,6 +342,15 @@ button.secondary{
 <script>
 const stores = JSON.parse(localStorage.getItem("stores")||"[]");
 const logs = JSON.parse(localStorage.getItem("logs")||"[]");
+
+function escapeHtmlHtml(str){
+  return String(str)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
 
 function todayStr(){
   const d = new Date();
@@ -502,7 +514,7 @@ function renderCategoryTable(mode, value){
     html += `<tr><td colspan="2">データなし</td></tr>`;
   }else{
     rows.forEach(([cat, count])=>{
-      html += `<tr><td>${cat}</td><td>${count}</td></tr>`;
+      html += `<tr><td>${escapeHtmlHtml(cat)}</td><td>${count}</td></tr>`;
     });
   }
 
@@ -520,8 +532,8 @@ function renderSummary(mode, value, stats, prefFilter){
   const label = mode==="monthly" ? "対象月" : "対象日";
 
   document.getElementById("summary").innerHTML=`
-    <div class="pill">表示範囲 ${prefFilter==="__ALL__" ? "全都道府県" : prefFilter}</div>
-    <div class="pill">${label} ${value}</div>
+    <div class="pill">表示範囲 ${prefFilter==="__ALL__" ? "全都道府県" : escapeHtmlHtml(prefFilter)}</div>
+    <div class="pill">${label} ${escapeHtmlHtml(value)}</div>
     <div class="pill">登録店舗 ${stats.length}件</div>
     <div class="pill">訪問 ${m.visit}</div>
     <div class="pill">成功 ${m.success}</div>
@@ -560,7 +572,7 @@ function renderPrefExpectedTable(){
   rows.forEach(r=>{
     html += `
       <tr>
-        <td>${r.pref}</td>
+        <td>${escapeHtmlHtml(r.pref)}</td>
         <td>${r.count}</td>
         <td>${Math.round(r.expectedSum).toLocaleString()}円</td>
         <td>${Math.round(r.expectedAvg).toLocaleString()}円</td>
@@ -674,8 +686,7 @@ function renderCalendar(monthValue){
   const [year, month] = monthValue.split("-").map(Number);
   const firstDay = new Date(year, month - 1, 1);
   const lastDate = new Date(year, month, 0).getDate();
-  const startWeekday = firstDay.getDay(); // 0=Sun
-
+  const startWeekday = firstDay.getDay();
   const weekdays = ["日","月","火","水","木","金","土"];
 
   let html = `
@@ -702,7 +713,6 @@ function renderCalendar(monthValue){
 
     const meta = [];
     if(ds.profit > 0) meta.push(`¥${ds.profit.toLocaleString()}`);
-    if(ds.success > 0) meta.push(`成功${ds.success}`);
 
     html += `
       <div class="calendarCell">
@@ -716,23 +726,14 @@ function renderCalendar(monthValue){
   area.innerHTML = html;
 }
 
-function escapeHtmlHtml(str){
-  return String(str)
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-
 function render(){
   const mode = document.getElementById("modeSelect").value;
   const value = mode==="monthly"
     ? document.getElementById("monthInput").value
     : document.getElementById("dateInput").value;
 
-  const prefFilter=document.getElementById("prefSelect").value;
-  const stats=calcStoreStats(prefFilter);
+  const prefFilter = document.getElementById("prefSelect").value;
+  const stats = calcStoreStats(prefFilter);
 
   const monthForCalendar = mode==="monthly"
     ? document.getElementById("monthInput").value
