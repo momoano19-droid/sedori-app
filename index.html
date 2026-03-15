@@ -114,7 +114,7 @@
 </div>
 
 <input id="address" placeholder="住所（これだけでもOK：自動で座標取得）">
-<input id="mapUrl" placeholder="Googleマップ共有リンク（任意）">
+<input id="mapUrl" placeholder="Googleマップ共有リンク（任意・共有→リンクコピー）">
 <button onclick="addStore()">店舗追加</button>
 
 <div class="toolbar">
@@ -161,7 +161,8 @@
   <div class="gray">
     ※ 個数＋ を押すと「成功」も自動で +1 されます。<br>
     ※ 個数入力後、カテゴリは複数に分けて登録できます。<br>
-    ※ 住所だけでも座標取得できます。Googleマップ共有リンクは任意です。<br>
+    ※ 住所だけでも自動で座標取得します。共有リンクを貼った場合はそちらを優先します。<br>
+    ※ GoogleマップURLは共有リンクでも長いURLでもOKです。<br>
     ※ 「📍近くの店舗（3km）」で現在地から3km以内の店舗を最上段表示します。
   </div>
 </div>
@@ -344,40 +345,56 @@ function extractLatLng(url){
   return null;
 }
 
-async function geocodeAddress(address){
-  const q = String(address || "").trim();
-  if(!q) return null;
-
-  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(q)}`;
-  const res = await fetch(endpoint, {
-    headers: {
-      "Accept": "application/json"
-    }
-  });
-
-  if(!res.ok) throw new Error("geocode_failed");
-  const data = await res.json();
-  if(!Array.isArray(data) || data.length===0) return null;
-
-  return {
-    lat: parseFloat(data[0].lat),
-    lng: parseFloat(data[0].lon)
-  };
+async function resolveGoogleSharedLink(url){
+  try{
+    const res = await fetch(url, { method:"GET", redirect:"follow", mode:"cors" });
+    const finalUrl = res.url || url;
+    const coords = extractLatLng(finalUrl);
+    if(coords) return { ...coords, finalUrl };
+  }catch(e){}
+  return null;
 }
 
-async function resolveLatLng(url, address){
-  const trimmedUrl = String(url || "").trim();
-  if(trimmedUrl){
-    const c = extractLatLng(trimmedUrl);
-    if(c) return c;
+async function geocodeAddress(address, pref="", name=""){
+  const q = [pref, address, name].map(v=>String(v||"").trim()).filter(Boolean).join(" ");
+  if(!q) return null;
+
+  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=jp&accept-language=ja&q=${encodeURIComponent(q)}`;
+
+  try{
+    const res = await fetch(endpoint, {
+      headers: { "Accept":"application/json" }
+    });
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(!Array.isArray(data) || data.length===0) return null;
+    return {
+      lat: parseFloat(data[0].lat),
+      lng: parseFloat(data[0].lon)
+    };
+  }catch(e){
+    return null;
+  }
+}
+
+async function resolveStoreLocation({ mapUrl, address, pref, name }){
+  const url = String(mapUrl || "").trim();
+  const addr = String(address || "").trim();
+
+  if(url){
+    const direct = extractLatLng(url);
+    if(direct) return { ...direct, mapUrl:url, source:"url" };
+
+    const shared = await resolveGoogleSharedLink(url);
+    if(shared) return { lat:shared.lat, lng:shared.lng, mapUrl:shared.finalUrl || url, source:"shared" };
   }
 
-  const trimmedAddress = String(address || "").trim();
-  if(trimmedAddress){
-    return await geocodeAddress(trimmedAddress);
+  if(addr){
+    const geo = await geocodeAddress(addr, pref, name);
+    if(geo) return { ...geo, mapUrl:url, source:"address" };
   }
 
-  return {lat:null, lng:null};
+  return null;
 }
 
 function addItemsToCategory(i, cat, delta){
@@ -501,7 +518,6 @@ function promptAllocation(cat){
   }
 
   rebuildAllocSummary();
-  rebuildChips();
 }
 function openCategoryModal(storeIndex, deltaItems, title, addSuccess=false){
   const s = stores[storeIndex];
@@ -607,30 +623,29 @@ async function addStore(){
   const name = document.getElementById("storeName").value.trim();
   const pref = document.getElementById("prefName").value.trim();
   const address = document.getElementById("address").value.trim();
-  const url = document.getElementById("mapUrl").value.trim();
+  const mapUrl = document.getElementById("mapUrl").value.trim();
   if(!name) return;
 
-  let lat=null, lng=null;
+  let lat = null;
+  let lng = null;
+  let finalMapUrl = mapUrl;
 
-  try{
-    const resolved = await resolveLatLng(url, address);
-    lat = resolved?.lat ?? null;
-    lng = resolved?.lng ?? null;
-  }catch(e){
-    alert("住所から座標を取得できませんでした。ネット接続を確認して、住所をもう少し詳しく入れてください。");
-    return;
-  }
-
-  if((address || url) && (lat===null || lng===null)){
-    alert("座標を取得できませんでした。住所を詳しく入れるか、Googleマップ共有リンクを入れてください。");
-    return;
+  const resolved = await resolveStoreLocation({ mapUrl, address, pref, name });
+  if(resolved){
+    lat = resolved.lat;
+    lng = resolved.lng;
+    finalMapUrl = resolved.mapUrl || mapUrl;
+  } else if(address || mapUrl){
+    const ok = confirm("座標が取得できませんでした。\n座標なしで保存しますか？");
+    if(!ok) return;
   }
 
   stores.push({
     id: ensureId(),
     name, pref, address,
     visits:0, buyDays:0, items:0, profit:0,
-    mapUrl:url, lat, lng,
+    mapUrl:finalMapUrl,
+    lat, lng,
     defaultCategory: "",
     categoryCounts:{},
     quickCategories: [],
@@ -663,7 +678,7 @@ async function editStore(i){
   const newAddr = prompt("住所", (s.address||"").trim());
   if(newAddr===null) return;
 
-  const newUrl = prompt("Googleマップ共有リンク（任意）", (s.mapUrl||"").trim());
+  const newUrl = prompt("Googleマップ共有リンク or URL（空欄OK）", (s.mapUrl||"").trim());
   if(newUrl===null) return;
 
   const newQuick = prompt("よく使うカテゴリ（/区切り）", (s.quickCategories||[]).join("/"));
@@ -671,25 +686,28 @@ async function editStore(i){
 
   let lat = null;
   let lng = null;
+  let finalMapUrl = String(newUrl).trim();
 
-  try{
-    const resolved = await resolveLatLng(newUrl, newAddr);
-    lat = resolved?.lat ?? null;
-    lng = resolved?.lng ?? null;
-  }catch(e){
-    alert("住所から座標を取得できませんでした。ネット接続を確認して、住所をもう少し詳しく入れてください。");
-    return;
-  }
+  const resolved = await resolveStoreLocation({
+    mapUrl: finalMapUrl,
+    address: String(newAddr).trim(),
+    pref: String(newPref).trim(),
+    name: nameTrim
+  });
 
-  if((String(newAddr).trim() || String(newUrl).trim()) && (lat===null || lng===null)){
-    alert("座標を取得できませんでした。住所を詳しく入れるか、Googleマップ共有リンクを入れてください。");
-    return;
+  if(resolved){
+    lat = resolved.lat;
+    lng = resolved.lng;
+    finalMapUrl = resolved.mapUrl || finalMapUrl;
+  } else if(String(newAddr).trim() || finalMapUrl){
+    const ok = confirm("座標が取得できませんでした。\n座標なしで保存しますか？");
+    if(!ok) return;
   }
 
   s.name = nameTrim;
   s.pref = String(newPref).trim();
   s.address = String(newAddr).trim();
-  s.mapUrl = String(newUrl).trim();
+  s.mapUrl = finalMapUrl;
   s.lat = lat;
   s.lng = lng;
   s.quickCategories = String(newQuick).split("/").map(x=>x.trim()).filter(Boolean).slice(0, QUICK_LIMIT);
@@ -934,8 +952,8 @@ function applyLayoutButtonState(){
 }
 
 function buildCardHeader(s, i, extraBadgesHtml=""){
-  const addressBlock = ((s.address||"").trim() || (typeof s.lat==="number" && typeof s.lng==="number"))
-    ? `<div class="addrRow"><div class="mini addrText">住所：${escapeHtml((s.address||"").trim() || "未登録")}</div><button class="secondary addrCopyBtn" onclick="navigateToStore(${i})">ナビ</button></div>`
+  const addressBlock = (s.address||"").trim()
+    ? `<div class="addrRow"><div class="mini addrText">住所：${escapeHtml(s.address.trim())}</div><button class="secondary addrCopyBtn" onclick="navigateToStore(${i})">ナビ</button></div>`
     : "";
 
   return `
