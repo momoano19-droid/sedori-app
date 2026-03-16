@@ -1,381 +1,130 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>せどり分析レポート</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>分析画面 | せどりGPS管理PRO</title>
 
 <style>
-body{
-  font-family:-apple-system;
-  background:#f4f6f8;
-  padding:20px;
-}
-h1{
-  font-size:22px;
-  margin-bottom:10px;
-}
-h2{
-  font-size:18px;
-  margin:0 0 8px 0;
-}
-.card{
-  background:white;
-  padding:16px;
-  border-radius:12px;
-  margin-top:14px;
-  box-shadow:0 2px 8px rgba(0,0,0,0.08);
-}
-table{
-  width:100%;
-  border-collapse:collapse;
-  margin-top:10px;
-}
-th,td{
-  padding:8px;
-  border-bottom:1px solid #eee;
-  text-align:left;
-  font-size:14px;
-}
-th{
-  background:#f5f7fa;
-}
-.kv{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-  margin-top:8px;
-}
-.pill{
-  background:#eef2f7;
-  padding:6px 10px;
-  border-radius:999px;
-  font-size:13px;
-}
-button, select, input{
-  width:100%;
-  padding:10px;
-  font-size:16px;
-  border:none;
-  border-radius:10px;
-  box-sizing:border-box;
-}
-input{
-  border:1px solid #d9e0ea;
-  background:#fff;
-}
-button{
-  background:#007aff;
-  color:white;
-}
-button.secondary{
-  background:#e9eef6;
-  color:#111;
-}
-.row2{
-  display:flex;
-  gap:8px;
-}
-.row2>*{
-  flex:1;
-}
-.gray{
-  color:#666;
-  font-size:13px;
-}
-
-/* 店舗評価カード */
-.judgeWrap{
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  margin-top:10px;
-}
-.judgeItem{
-  border-radius:14px;
-  padding:14px;
-  box-shadow:0 2px 8px rgba(0,0,0,0.06);
-}
-.judgeItem.hot{
-  background:#fff1f0;
-  border:1px solid #ffccc7;
-}
-.judgeItem.mid{
-  background:#fffbe6;
-  border:1px solid #ffe58f;
-}
-.judgeItem.cold{
-  background:#f0f5ff;
-  border:1px solid #adc6ff;
-}
-.judgeTop{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:10px;
-}
-.judgeTitle{
-  font-size:20px;
-  font-weight:800;
-  line-height:1.2;
-  color:#111;
-}
-.judgePref{
-  margin-top:4px;
-  font-size:14px;
-  color:#555;
-  font-weight:600;
-}
-.judgeBadge{
-  display:inline-block;
-  padding:4px 10px;
-  border-radius:999px;
-  font-size:12px;
-  font-weight:700;
-  white-space:nowrap;
-}
-.judgeBadge.hot{
-  background:#ff4d4f;
-  color:#fff;
-}
-.judgeBadge.mid{
-  background:#faad14;
-  color:#fff;
-}
-.judgeBadge.cold{
-  background:#597ef7;
-  color:#fff;
-}
-.judgeMain{
-  margin-top:12px;
-  font-size:15px;
-  line-height:1.7;
-  color:#222;
-}
-.judgeStrong{
-  font-weight:800;
-}
-.judgeSub{
-  margin-top:10px;
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-}
-.judgePill{
-  background:rgba(255,255,255,0.7);
-  padding:6px 10px;
-  border-radius:999px;
-  font-size:13px;
-}
-
-/* カレンダー */
-.calendarWrap{
-  margin-top:10px;
-}
-.calendarHeader{
-  display:grid;
-  grid-template-columns:repeat(7,1fr);
-  gap:6px;
-  margin-bottom:8px;
-}
-.calendarWeekday{
-  text-align:center;
-  font-size:12px;
-  color:#667;
-  font-weight:700;
-  padding:4px 0;
-}
-.calendarGrid{
-  display:grid;
-  grid-template-columns:repeat(7,1fr);
-  gap:6px;
-}
-.calendarCell{
-  aspect-ratio:1/1;
-  background:#f8fafc;
-  border:1px solid #edf2f7;
-  border-radius:10px;
-  padding:6px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:flex-start;
-  overflow:hidden;
-  cursor:pointer;
-  transition:transform .08s ease, box-shadow .08s ease, border-color .08s ease;
-}
-.calendarCell:active{
-  transform:scale(0.98);
-}
-.calendarCell:hover{
-  box-shadow:0 2px 6px rgba(0,0,0,0.08);
-}
-.calendarCell.empty{
-  background:transparent;
-  border:none;
-  cursor:default;
-  box-shadow:none;
-}
-.calendarCell.selected{
-  border-color:#1677ff;
-  box-shadow:0 0 0 2px rgba(22,119,255,0.12);
-}
-.calendarDay{
-  width:26px;
-  height:26px;
-  border-radius:50%;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-weight:bold;
-  font-size:13px;
-  margin-bottom:4px;
-  color:#223;
-}
-.calendarDay.normal{
-  background:#ffe58f;
-  color:#4d3b00;
-}
-.calendarDay.big{
-  background:#52c41a;
-  color:white;
-}
-.calendarMeta{
-  font-size:10px;
-  line-height:1.2;
-  text-align:center;
-  color:#666;
-  word-break:break-word;
-}
-.calendarLegend{
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-  margin-top:10px;
-}
-.legendItem{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  font-size:12px;
-  color:#445;
-}
-.legendDot{
-  width:18px;
-  height:18px;
-  border-radius:999px;
-  border:1px solid #d9e2ec;
-  background:#fff;
-}
-.legendDot.normal{
-  background:#ffe58f;
-  border-color:#ffe58f;
-}
-.legendDot.big{
-  background:#52c41a;
-  border-color:#52c41a;
-}
-
-/* 日別詳細 */
-.dayDetailTitle{
-  font-size:16px;
-  font-weight:800;
-  color:#223;
-  margin-bottom:6px;
-}
-.dayDetailEmpty{
-  color:#666;
-  font-size:14px;
-}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:16px;
+    background:#f4f6f8;
+    color:#222;
+  }
+  h1{
+    font-size:22px;
+    margin:0 0 6px 0;
+  }
+  .sub{
+    color:#667;
+    font-size:13px;
+    margin-bottom:12px;
+  }
+  .toolbar,.card{
+    background:#fff;
+    border-radius:12px;
+    padding:12px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.06);
+    margin-top:12px;
+  }
+  .row2{
+    display:flex;
+    gap:8px;
+  }
+  .row2 > *{
+    flex:1;
+  }
+  button,select{
+    padding:10px;
+    width:100%;
+    font-size:16px;
+    box-sizing:border-box;
+    border:none;
+    border-radius:10px;
+  }
+  button{
+    background:#007aff;
+    color:#fff;
+  }
+  button.secondary{
+    background:#e9eef6;
+    color:#123;
+  }
+  .kv{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .pill{
+    background:#f0f3f8;
+    border-radius:999px;
+    padding:6px 10px;
+    font-size:13px;
+  }
+  .sectionTitle{
+    font-weight:800;
+    color:#223;
+    margin-top:18px;
+    margin-bottom:8px;
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    background:#fff;
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:0 2px 8px rgba(0,0,0,0.06);
+    margin-top:10px;
+  }
+  th,td{
+    padding:10px;
+    border-bottom:1px solid #eef2f7;
+    text-align:left;
+    font-size:14px;
+  }
+  th{
+    background:#f7f9fc;
+    color:#223;
+  }
+  tr:last-child td{
+    border-bottom:none;
+  }
+  .gray{
+    color:#666;
+    font-size:14px;
+  }
 </style>
 </head>
-
 <body>
+<h1>📊 分析画面</h1>
+<div class="sub">月次サマリー・曜日分析・ランキング・補充周期・カテゴリ集計をまとめて見る画面です。</div>
 
-<h1>📊 せどり分析レポート</h1>
-
-<div class="card">
+<div class="toolbar">
   <div class="row2">
-    <button class="secondary" onclick="location.href='index.html'">← 店舗管理に戻る</button>
-    <select id="modeSelect"></select>
+    <button onclick="location.href='index.html'">🏠 店舗管理へ戻る</button>
+    <button class="secondary" onclick="renderReport()">更新</button>
   </div>
+</div>
 
+<div class="toolbar">
   <div class="row2">
-    <input id="monthInput" type="month">
-    <input id="dateInput" type="date" style="display:none;">
-  </div>
-
-  <div class="row2">
-    <select id="prefSelect"></select>
-    <button class="secondary" onclick="render()">再表示</button>
-  </div>
-
-  <div class="gray" style="margin-top:8px;">
-    月表示では月間集計、日表示ではその日の集計を表示します。
+    <select id="monthSelect" onchange="renderReport()"></select>
+    <select id="prefFilter" onchange="renderReport()"></select>
   </div>
 </div>
 
-<div class="card">
-  <h2>月カレンダー</h2>
-  <div class="gray">日付をタップするとその日の詳細が表示されます。緑 = 大成功日（利益10万円以上）、黄 = 普通（成功あり・利益10万円未満）</div>
-  <div id="calendarArea" class="calendarWrap"></div>
-  <div class="calendarLegend">
-    <div class="legendItem"><span class="legendDot big"></span>大成功日</div>
-    <div class="legendItem"><span class="legendDot normal"></span>普通</div>
-  </div>
-</div>
-
-<div class="card">
-  <h2>タップした日の詳細</h2>
-  <div id="dayDetailArea"></div>
-</div>
-
-<div class="card">
-  <h2>サマリー</h2>
-  <div id="summary" class="kv"></div>
-</div>
-
-<div class="card">
-  <h2>カテゴリ集計</h2>
-  <table id="categoryTable"></table>
-</div>
-
-<div class="card">
-  <h2>都道府県別 期待値サマリー</h2>
-  <table id="prefExpectedTable"></table>
-</div>
-
-<div class="card">
-  <h2>店舗評価一覧</h2>
-  <div class="kv">
-    <div class="pill">🔥 行くべき店舗 = 期待値2000円以上 or 成功率40%以上</div>
-    <div class="pill">⚠️ 微妙店舗 = 期待値800〜1999円 or 成功率20〜39.9%</div>
-    <div class="pill">❌ 行かなくていい店舗 = 期待値800円未満 かつ 成功率20%未満</div>
-  </div>
-  <div id="judgeCards" class="judgeWrap"></div>
-</div>
-
-<div class="card">
-  <h2>期待値 TOP10</h2>
-  <table id="expectedTable"></table>
-</div>
-
-<div class="card">
-  <h2>成功率 TOP10</h2>
-  <table id="rateTable"></table>
-</div>
-
-<div class="card">
-  <h2>利益 TOP10</h2>
-  <table id="profitTable"></table>
-</div>
+<div id="reportArea"></div>
 
 <script>
-const stores = JSON.parse(localStorage.getItem("stores")||"[]");
-const logs = JSON.parse(localStorage.getItem("logs")||"[]");
-let selectedCalendarDate = "";
+const KEY_STORES = "stores";
+const KEY_LOGS = "logs";
 
-function escapeHtmlHtml(str){
+let stores = JSON.parse(localStorage.getItem(KEY_STORES) || "[]");
+let logs = JSON.parse(localStorage.getItem(KEY_LOGS) || "[]");
+
+function escapeHtml(str){
   return String(str)
     .replaceAll("&","&amp;")
     .replaceAll("<","&lt;")
@@ -383,465 +132,210 @@ function escapeHtmlHtml(str){
     .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
 }
-
-function todayStr(){
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,"0");
-  const day = String(d.getDate()).padStart(2,"0");
-  return `${y}-${m}-${day}`;
+function clampNonNeg(n){
+  return Math.max(0, Number(n) || 0);
 }
-function thisMonthStr(){
-  return todayStr().slice(0,7);
+function parseDateLocal(dateStr){
+  if(!dateStr) return null;
+  const parts = String(dateStr).split("-");
+  if(parts.length !== 3) return null;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if(!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+function getWeekdayJa(dateStr){
+  const d = parseDateLocal(dateStr);
+  if(!d) return "";
+  return ["日","月","火","水","木","金","土"][d.getDay()];
+}
+function daysBetween(a, b){
+  const da = parseDateLocal(a);
+  const db = parseDateLocal(b);
+  if(!da || !db) return null;
+  return Math.abs(db - da) / (1000 * 60 * 60 * 24);
 }
 
-function monthList(){
-  const set=new Set();
-  logs.forEach(l=>{
-    if(l.date) set.add(l.date.slice(0,7));
+function calcMetrics(s){
+  const visits = clampNonNeg(s.visits);
+  const success = clampNonNeg(s.buyDays);
+  const items = clampNonNeg(s.items);
+  const profit = clampNonNeg(s.profit);
+
+  const rate = visits > 0 ? (success / visits) * 100 : 0;
+  const avgProfit = success > 0 ? (profit / success) : 0;
+  const expected = (rate / 100) * avgProfit;
+  const avgItems = success > 0 ? (items / success) : 0;
+
+  return {visits, success, items, profit, rate, avgProfit, expected, avgItems};
+}
+
+function getStoreVisitDates(storeId){
+  const dates = logs
+    .filter(x => x.storeId === storeId && x.type === "visit" && Number(x.delta) > 0 && x.date)
+    .map(x => x.date)
+    .sort();
+  return [...new Set(dates)];
+}
+
+function calcRestockCycle(storeId){
+  const dates = getStoreVisitDates(storeId);
+  if(dates.length < 2) return null;
+  const diffs = [];
+  for(let i=1;i<dates.length;i++){
+    const diff = daysBetween(dates[i-1], dates[i]);
+    if(typeof diff === "number" && diff > 0) diffs.push(diff);
+  }
+  if(!diffs.length) return null;
+  return diffs.reduce((a,b)=>a+b,0) / diffs.length;
+}
+
+function calcStrongWeekdays(storeId){
+  const visitDates = getStoreVisitDates(storeId);
+  if(!visitDates.length) return [];
+  const countMap = {};
+  visitDates.forEach(dateStr=>{
+    const w = getWeekdayJa(dateStr);
+    if(!w) return;
+    countMap[w] = (countMap[w] || 0) + 1;
   });
-  const arr = [...set].sort().reverse();
-  if(arr.length===0) arr.push(thisMonthStr());
-  return arr;
+  const entries = Object.entries(countMap).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length) return [];
+  const max = entries[0][1];
+  return entries.filter(x => x[1] === max).map(x => x[0]);
 }
 
-function prefList(){
+function buildMonthSelect(){
+  const sel = document.getElementById("monthSelect");
   const set = new Set();
+
+  logs.forEach(l=>{
+    if(l.date && String(l.date).length >= 7){
+      set.add(String(l.date).slice(0,7));
+    }
+  });
+
+  if(set.size === 0){
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+    set.add(month);
+  }
+
+  const months = Array.from(set).sort().reverse();
+  const current = sel.value || months[0];
+
+  sel.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join("");
+  if(months.includes(current)) sel.value = current;
+}
+
+function buildPrefFilter(){
+  const sel = document.getElementById("prefFilter");
+  const prefSet = new Set();
   stores.forEach(s=>{
-    const p = (s.pref || "").trim();
-    if(p) set.add(p);
+    const p = String(s.pref || "").trim();
+    if(p) prefSet.add(p);
   });
-  return [...set].sort((a,b)=>a.localeCompare(b,"ja"));
+  const prefs = Array.from(prefSet).sort((a,b)=>a.localeCompare(b,'ja'));
+  const current = sel.value || "__ALL__";
+
+  sel.innerHTML = `<option value="__ALL__">全都道府県</option>` + prefs.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+  if(["__ALL__", ...prefs].includes(current)) sel.value = current;
 }
 
-function initControls(){
-  const modeSel = document.getElementById("modeSelect");
-  modeSel.innerHTML = `
-    <option value="monthly">月表示</option>
-    <option value="daily">日表示</option>
-  `;
+function getFilteredStores(){
+  const pref = document.getElementById("prefFilter").value;
+  if(pref === "__ALL__") return stores.slice();
+  return stores.filter(s => String(s.pref || "").trim() === pref);
+}
 
-  const monthInput = document.getElementById("monthInput");
-  const dateInput = document.getElementById("dateInput");
+function getMonthLogs(month, storeIdsSet){
+  return logs.filter(l => String(l.date || "").startsWith(month) && storeIdsSet.has(l.storeId));
+}
 
-  const months = monthList();
-  monthInput.value = months[0] || thisMonthStr();
-  dateInput.value = todayStr();
-  selectedCalendarDate = dateInput.value || `${monthInput.value}-01`;
+function renderReport(){
+  buildMonthSelect();
+  buildPrefFilter();
 
-  modeSel.onchange = ()=>{
-    syncModeUI();
-    if(modeSel.value === "daily"){
-      selectedCalendarDate = document.getElementById("dateInput").value;
-    }else{
-      const month = document.getElementById("monthInput").value;
-      if(!selectedCalendarDate || !selectedCalendarDate.startsWith(month)){
-        selectedCalendarDate = `${month}-01`;
-      }
-    }
-    render();
+  const month = document.getElementById("monthSelect").value;
+  const filteredStores = getFilteredStores();
+  const storeIdsSet = new Set(filteredStores.map(s => s.id));
+  const monthLogs = getMonthLogs(month, storeIdsSet);
+
+  const reportArea = document.getElementById("reportArea");
+
+  const storeMap = new Map(filteredStores.map(s => [s.id, s]));
+
+  let monthProfit = 0;
+  let monthVisits = 0;
+  let monthSuccess = 0;
+  let monthItems = 0;
+
+  monthLogs.forEach(l=>{
+    if(l.type === "profit") monthProfit += Number(l.delta) || 0;
+    if(l.type === "visit" && Number(l.delta) > 0) monthVisits += Number(l.delta) || 0;
+    if(l.type === "success" && Number(l.delta) > 0) monthSuccess += Number(l.delta) || 0;
+    if(l.type === "items" && Number(l.delta) > 0) monthItems += Number(l.delta) || 0;
+  });
+
+  const monthRate = monthVisits > 0 ? (monthSuccess / monthVisits) * 100 : 0;
+
+  const weekdayMap = {
+    "月": {profit:0, visits:0, success:0},
+    "火": {profit:0, visits:0, success:0},
+    "水": {profit:0, visits:0, success:0},
+    "木": {profit:0, visits:0, success:0},
+    "金": {profit:0, visits:0, success:0},
+    "土": {profit:0, visits:0, success:0},
+    "日": {profit:0, visits:0, success:0}
   };
 
-  monthInput.onchange = ()=>{
-    const month = monthInput.value;
-    if(!selectedCalendarDate || !selectedCalendarDate.startsWith(month)){
-      selectedCalendarDate = `${month}-01`;
+  monthLogs.forEach(l=>{
+    const w = getWeekdayJa(l.date);
+    if(!weekdayMap[w]) return;
+    if(l.type === "profit") weekdayMap[w].profit += Number(l.delta) || 0;
+    if(l.type === "visit" && Number(l.delta) > 0) weekdayMap[w].visits += Number(l.delta) || 0;
+    if(l.type === "success" && Number(l.delta) > 0) weekdayMap[w].success += Number(l.delta) || 0;
+  });
+
+  const categoryMap = {};
+  monthLogs.forEach(l=>{
+    if(l.type === "items" && Number(l.delta) > 0 && l.category){
+      const c = String(l.category).trim();
+      if(!c) return;
+      categoryMap[c] = (categoryMap[c] || 0) + (Number(l.delta) || 0);
     }
-    render();
-  };
-
-  dateInput.onchange = ()=>{
-    selectedCalendarDate = dateInput.value;
-    render();
-  };
-
-  const prefSel = document.getElementById("prefSelect");
-  prefSel.innerHTML = `<option value="__ALL__">全都道府県</option>`;
-  prefList().forEach(p=>{
-    const opt = document.createElement("option");
-    opt.value = p;
-    opt.textContent = p;
-    prefSel.appendChild(opt);
-  });
-  prefSel.onchange = render;
-
-  syncModeUI();
-}
-
-function syncModeUI(){
-  const mode = document.getElementById("modeSelect").value;
-  document.getElementById("monthInput").style.display = mode==="monthly" ? "block" : "none";
-  document.getElementById("dateInput").style.display = mode==="daily" ? "block" : "none";
-}
-
-function calcPeriod(mode, value){
-  let visit=0, success=0, items=0, profit=0;
-
-  logs.forEach(l=>{
-    if(!l.date) return;
-
-    const hit = mode==="monthly"
-      ? l.date.startsWith(value)
-      : l.date === value;
-
-    if(!hit) return;
-
-    if(l.type==="visit") visit += l.delta;
-    if(l.type==="success") success += l.delta;
-    if(l.type==="items") items += l.delta;
-    if(l.type==="profit") profit += l.delta;
   });
 
-  return {visit, success, items, profit};
-}
-
-function calcStoreStats(prefFilter="__ALL__"){
-  return stores
-    .filter(s=>{
-      if(prefFilter==="__ALL__") return true;
-      return (s.pref || "").trim() === prefFilter;
-    })
-    .map(s=>{
-      const visits=s.visits||0;
-      const success=s.buyDays||0;
-      const profit=s.profit||0;
-      const items=s.items||0;
-
-      const rate=visits ? success/visits : 0;
-      const avgProfit=success ? profit/success : 0;
-      const expected=rate*avgProfit;
-
-      return {
-        name:s.name,
-        pref:(s.pref||"").trim() || "未設定",
-        expected,
-        rate:rate*100,
-        profit,
-        visits,
-        success,
-        items
-      };
-    });
-}
-
-function judgeStore(s){
-  if(s.expected >= 2000 || s.rate >= 40){
-    return {label:"🔥 行くべき店舗", cls:"hot"};
-  }
-  if(s.expected >= 800 || s.rate >= 20){
-    return {label:"⚠️ 微妙店舗", cls:"mid"};
-  }
-  return {label:"❌ 行かなくていい店舗", cls:"cold"};
-}
-
-function categoryTotals(mode, value){
-  const map = new Map();
-
-  logs.forEach(l=>{
-    if(l.type !== "items") return;
-    if(!l.category) return;
-
-    const hit = mode==="monthly"
-      ? l.date && l.date.startsWith(value)
-      : l.date === value;
-
-    if(!hit) return;
-
-    const cat = String(l.category).trim();
-    if(!cat) return;
-
-    map.set(cat, (map.get(cat) || 0) + (Number(l.delta) || 0));
+  const enrichedStores = filteredStores.map(s=>{
+    const m = calcMetrics(s);
+    return {
+      ...s,
+      _m: m,
+      _restock: calcRestockCycle(s.id),
+      _strongWeekdays: calcStrongWeekdays(s.id)
+    };
   });
 
-  return [...map.entries()]
-    .filter(([,count])=>count>0)
-    .sort((a,b)=>b[1]-a[1]);
-}
+  const topExpected = enrichedStores.slice().sort((a,b)=>b._m.expected - a._m.expected).slice(0,10);
+  const topProfit = enrichedStores.slice().sort((a,b)=>b._m.profit - a._m.profit).slice(0,10);
+  const topRate = enrichedStores.slice().sort((a,b)=>b._m.rate - a._m.rate).slice(0,10);
+  const topAvgProfit = enrichedStores.slice().sort((a,b)=>b._m.avgProfit - a._m.avgProfit).slice(0,10);
+  const topAvgItems = enrichedStores.slice().sort((a,b)=>b._m.avgItems - a._m.avgItems).slice(0,10);
+  const restockList = enrichedStores
+    .filter(s => typeof s._restock === "number")
+    .sort((a,b)=>a._restock - b._restock);
 
-function dailyCategoryTotals(dateStr){
-  const map = new Map();
-
-  logs.forEach(l=>{
-    if(l.type !== "items") return;
-    if(l.date !== dateStr) return;
-    if(!l.category) return;
-
-    const cat = String(l.category).trim();
-    if(!cat) return;
-    map.set(cat, (map.get(cat) || 0) + (Number(l.delta) || 0));
-  });
-
-  return [...map.entries()]
-    .filter(([,count])=>count>0)
-    .sort((a,b)=>b[1]-a[1]);
-}
-
-function renderCategoryTable(mode, value){
-  const rows = categoryTotals(mode, value);
-  let html = `<tr><th>カテゴリ</th><th>個数</th></tr>`;
-
-  if(rows.length===0){
-    html += `<tr><td colspan="2">データなし</td></tr>`;
-  }else{
-    rows.forEach(([cat, count])=>{
-      html += `<tr><td>${escapeHtmlHtml(cat)}</td><td>${count}</td></tr>`;
-    });
-  }
-
-  document.getElementById("categoryTable").innerHTML = html;
-}
-
-function renderSummary(mode, value, stats, prefFilter){
-  const m = calcPeriod(mode, value);
-  const avgItems = m.success ? (m.items/m.success).toFixed(2) : 0;
-  const successRate = m.visit ? ((m.success/m.visit)*100).toFixed(1) : 0;
-
-  const expectedSum = stats.reduce((sum,s)=>sum+s.expected,0);
-  const expectedAvg = stats.length ? expectedSum / stats.length : 0;
-
-  const label = mode==="monthly" ? "対象月" : "対象日";
-
-  document.getElementById("summary").innerHTML=`
-    <div class="pill">表示範囲 ${prefFilter==="__ALL__" ? "全都道府県" : escapeHtmlHtml(prefFilter)}</div>
-    <div class="pill">${label} ${escapeHtmlHtml(value)}</div>
-    <div class="pill">登録店舗 ${stats.length}件</div>
-    <div class="pill">訪問 ${m.visit}</div>
-    <div class="pill">成功 ${m.success}</div>
-    <div class="pill">仕入れ個数 ${m.items}</div>
-    <div class="pill">利益 ${m.profit.toLocaleString()}円</div>
-    <div class="pill">${mode==="monthly" ? "月間" : "当日"}の店舗平均仕入れ個数 ${avgItems}</div>
-    <div class="pill">${mode==="monthly" ? "月間" : "当日"}の仕入れ成功確率 ${successRate}%</div>
-    <div class="pill">期待値合計 ${Math.round(expectedSum).toLocaleString()}円</div>
-    <div class="pill">平均期待値 ${Math.round(expectedAvg).toLocaleString()}円</div>
-  `;
-}
-
-function renderPrefExpectedTable(){
-  const allStats = calcStoreStats("__ALL__");
-  const map = new Map();
-
-  allStats.forEach(s=>{
-    const pref = s.pref || "未設定";
-    if(!map.has(pref)){
-      map.set(pref, {count:0, expectedSum:0});
-    }
-    const row = map.get(pref);
-    row.count += 1;
-    row.expectedSum += s.expected;
-  });
-
-  const rows = Array.from(map.entries()).map(([pref, row])=>({
-    pref,
-    count: row.count,
-    expectedSum: row.expectedSum,
-    expectedAvg: row.count ? row.expectedSum / row.count : 0
-  })).sort((a,b)=>b.expectedSum-a.expectedSum);
-
-  let html = `<tr><th>都道府県</th><th>店舗数</th><th>期待値合計</th><th>平均期待値</th></tr>`;
-
-  rows.forEach(r=>{
-    html += `
-      <tr>
-        <td>${escapeHtmlHtml(r.pref)}</td>
-        <td>${r.count}</td>
-        <td>${Math.round(r.expectedSum).toLocaleString()}円</td>
-        <td>${Math.round(r.expectedAvg).toLocaleString()}円</td>
-      </tr>
-    `;
-  });
-
-  document.getElementById("prefExpectedTable").innerHTML = html;
-}
-
-function renderJudgeCards(stats){
-  const root = document.getElementById("judgeCards");
-
-  if(stats.length===0){
-    root.innerHTML = `<div class="gray">表示できる店舗がありません。</div>`;
-    return;
-  }
-
-  const html = stats
-    .slice()
-    .sort((a,b)=>b.expected-a.expected)
-    .map(s=>{
-      const j = judgeStore(s);
-      return `
-        <div class="judgeItem ${j.cls}">
-          <div class="judgeTop">
-            <div>
-              <div class="judgeTitle">${escapeHtmlHtml(s.name)}</div>
-              <div class="judgePref">${escapeHtmlHtml(s.pref)}</div>
-            </div>
-            <div class="judgeBadge ${j.cls}">${j.label}</div>
-          </div>
-
-          <div class="judgeMain">
-            <span class="judgeStrong">期待値 ${Math.round(s.expected).toLocaleString()}円</span>
-            &nbsp;|&nbsp;
-            <span class="judgeStrong">成功率 ${s.rate.toFixed(1)}%</span>
-          </div>
-
-          <div class="judgeMain">
-            利益 ${s.profit.toLocaleString()}円
-          </div>
-
-          <div class="judgeMain">
-            訪問 ${s.visits}回 / 成功 ${s.success}回
-          </div>
-
-          <div class="judgeMain">
-            仕入れ個数 ${s.items}
-          </div>
-
-          <div class="judgeSub">
-            <div class="judgePill">期待値 ${Math.round(s.expected).toLocaleString()}円</div>
-            <div class="judgePill">成功率 ${s.rate.toFixed(1)}%</div>
-            <div class="judgePill">利益 ${s.profit.toLocaleString()}円</div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  root.innerHTML = html;
-}
-
-function tableRender(id,data,field){
-  let html="<tr><th>順位</th><th>店舗</th><th>都道府県</th><th>値</th></tr>";
-
-  data.slice(0,10).forEach((s,i)=>{
-    let v=s[field];
-    if(field==="rate") v=v.toFixed(1)+"%";
-    if(field==="expected") v=Math.round(v).toLocaleString()+"円";
-    if(field==="profit") v=s.profit.toLocaleString()+"円";
-
-    html+=`
-      <tr>
-        <td>${i+1}</td>
-        <td>${escapeHtmlHtml(s.name)}</td>
-        <td>${escapeHtmlHtml(s.pref)}</td>
-        <td>${v}</td>
-      </tr>
-    `;
-  });
-
-  document.getElementById(id).innerHTML=html;
-}
-
-function calcDayStats(dateStr){
-  let visit = 0;
-  let success = 0;
-  let items = 0;
-  let profit = 0;
-
-  logs.forEach(l=>{
-    if(l.date !== dateStr) return;
-    if(l.type==="visit") visit += l.delta;
-    if(l.type==="success") success += l.delta;
-    if(l.type==="items") items += l.delta;
-    if(l.type==="profit") profit += l.delta;
-  });
-
-  return {visit, success, items, profit};
-}
-
-function selectCalendarDate(dateStr){
-  selectedCalendarDate = dateStr;
-  const mode = document.getElementById("modeSelect").value;
-  if(mode === "daily"){
-    document.getElementById("dateInput").value = dateStr;
-  }
-  render();
-}
-
-function renderCalendar(monthValue){
-  const area = document.getElementById("calendarArea");
-  if(!monthValue){
-    area.innerHTML = `<div class="gray">表示する月がありません。</div>`;
-    return;
-  }
-
-  const [year, month] = monthValue.split("-").map(Number);
-  const firstDay = new Date(year, month - 1, 1);
-  const lastDate = new Date(year, month, 0).getDate();
-  const startWeekday = firstDay.getDay();
-  const weekdays = ["日","月","火","水","木","金","土"];
-
-  if(!selectedCalendarDate || !selectedCalendarDate.startsWith(monthValue)){
-    selectedCalendarDate = `${monthValue}-01`;
-  }
-
-  let html = `
-    <div class="calendarHeader">
-      ${weekdays.map(d=>`<div class="calendarWeekday">${d}</div>`).join("")}
-    </div>
-    <div class="calendarGrid">
-  `;
-
-  for(let i=0;i<startWeekday;i++){
-    html += `<div class="calendarCell empty"></div>`;
-  }
-
-  for(let day=1; day<=lastDate; day++){
-    const dateStr = `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-    const ds = calcDayStats(dateStr);
-
-    let dayClass = "";
-    if(ds.profit >= 100000){
-      dayClass = "big";
-    }else if(ds.success > 0 && ds.profit < 100000){
-      dayClass = "normal";
-    }
-
-    const meta = [];
-    if(ds.profit > 0) meta.push(`¥${ds.profit.toLocaleString()}`);
-
-    const selectedClass = selectedCalendarDate === dateStr ? "selected" : "";
-
-    html += `
-      <div class="calendarCell ${selectedClass}" onclick="selectCalendarDate('${dateStr}')">
-        <div class="calendarDay ${dayClass}">${day}</div>
-        <div class="calendarMeta">${meta.join("<br>")}</div>
-      </div>
-    `;
-  }
-
-  html += `</div>`;
-  area.innerHTML = html;
-}
-
-function renderDayDetail(dateStr){
-  const area = document.getElementById("dayDetailArea");
-  if(!dateStr){
-    area.innerHTML = `<div class="dayDetailEmpty">日付をタップすると詳細が表示されます。</div>`;
-    return;
-  }
-
-  const ds = calcDayStats(dateStr);
-  const catRows = dailyCategoryTotals(dateStr);
-
-  let html = `
-    <div class="dayDetailTitle">${escapeHtmlHtml(dateStr)} の詳細</div>
-    <div class="kv">
-      <div class="pill">訪問 ${ds.visit}</div>
-      <div class="pill">成功 ${ds.success}</div>
-      <div class="pill">仕入れ個数 ${ds.items}</div>
-      <div class="pill">利益 ${ds.profit.toLocaleString()}円</div>
-    </div>
-  `;
-
-  if(catRows.length===0){
-    html += `<div class="gray" style="margin-top:10px;">カテゴリデータなし</div>`;
-  }else{
-    html += `
+  function tableForStores(rows, columns){
+    return `
       <table>
-        <thead><tr><th>カテゴリ</th><th>個数</th></tr></thead>
+        <thead>
+          <tr>${columns.map(c=>`<th>${c.label}</th>`).join("")}</tr>
+        </thead>
         <tbody>
-          ${catRows.map(([cat,count])=>`
+          ${rows.map(r=>`
             <tr>
-              <td>${escapeHtmlHtml(cat)}</td>
-              <td>${count}</td>
+              ${columns.map(c=>`<td>${c.render(r)}</td>`).join("")}
             </tr>
           `).join("")}
         </tbody>
@@ -849,51 +343,124 @@ function renderDayDetail(dateStr){
     `;
   }
 
-  area.innerHTML = html;
+  reportArea.innerHTML = `
+    <div class="card">
+      <div class="sectionTitle">📌 ${escapeHtml(month)} サマリー</div>
+      <div class="kv">
+        <div class="pill"><b>対象店舗</b> ${filteredStores.length}件</div>
+        <div class="pill"><b>今月利益</b> ${monthProfit.toLocaleString()}円</div>
+        <div class="pill"><b>今月訪問</b> ${monthVisits}回</div>
+        <div class="pill"><b>今月成功</b> ${monthSuccess}回</div>
+        <div class="pill"><b>今月個数</b> ${monthItems}個</div>
+        <div class="pill"><b>今月成功率</b> ${monthRate.toFixed(1)}%</div>
+      </div>
+    </div>
+
+    <div class="sectionTitle">📅 曜日分析</div>
+    <table>
+      <thead>
+        <tr>
+          <th>曜日</th>
+          <th>利益</th>
+          <th>訪問</th>
+          <th>成功</th>
+          <th>成功率</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${["月","火","水","木","金","土","日"].map(w=>{
+          const row = weekdayMap[w];
+          const rate = row.visits > 0 ? (row.success / row.visits) * 100 : 0;
+          return `
+            <tr>
+              <td>${w}</td>
+              <td>${row.profit.toLocaleString()}円</td>
+              <td>${row.visits}回</td>
+              <td>${row.success}回</td>
+              <td>${rate.toFixed(1)}%</td>
+            </tr>
+          `;
+        }).join("")}
+      </tbody>
+    </table>
+
+    <div class="sectionTitle">🏆 期待値TOP10</div>
+    ${tableForStores(topExpected, [
+      {label:"店舗", render:r=>escapeHtml(r.name)},
+      {label:"都道府県", render:r=>escapeHtml(String(r.pref || "").trim() || "未設定")},
+      {label:"期待値", render:r=>`${Math.round(r._m.expected).toLocaleString()}円`},
+      {label:"成功率", render:r=>`${r._m.rate.toFixed(1)}%`}
+    ])}
+
+    <div class="sectionTitle">💰 利益TOP10</div>
+    ${tableForStores(topProfit, [
+      {label:"店舗", render:r=>escapeHtml(r.name)},
+      {label:"都道府県", render:r=>escapeHtml(String(r.pref || "").trim() || "未設定")},
+      {label:"利益", render:r=>`${r._m.profit.toLocaleString()}円`},
+      {label:"成功率", render:r=>`${r._m.rate.toFixed(1)}%`}
+    ])}
+
+    <div class="sectionTitle">🎯 成功率TOP10</div>
+    ${tableForStores(topRate, [
+      {label:"店舗", render:r=>escapeHtml(r.name)},
+      {label:"都道府県", render:r=>escapeHtml(String(r.pref || "").trim() || "未設定")},
+      {label:"成功率", render:r=>`${r._m.rate.toFixed(1)}%`},
+      {label:"期待値", render:r=>`${Math.round(r._m.expected).toLocaleString()}円`}
+    ])}
+
+    <div class="sectionTitle">📈 平均利益TOP10</div>
+    ${tableForStores(topAvgProfit, [
+      {label:"店舗", render:r=>escapeHtml(r.name)},
+      {label:"都道府県", render:r=>escapeHtml(String(r.pref || "").trim() || "未設定")},
+      {label:"平均利益", render:r=>`${Math.round(r._m.avgProfit).toLocaleString()}円`},
+      {label:"平均個数", render:r=>`${r._m.avgItems.toFixed(1)}個`}
+    ])}
+
+    <div class="sectionTitle">📦 平均個数TOP10</div>
+    ${tableForStores(topAvgItems, [
+      {label:"店舗", render:r=>escapeHtml(r.name)},
+      {label:"都道府県", render:r=>escapeHtml(String(r.pref || "").trim() || "未設定")},
+      {label:"平均個数", render:r=>`${r._m.avgItems.toFixed(1)}個`},
+      {label:"平均利益", render:r=>`${Math.round(r._m.avgProfit).toLocaleString()}円`}
+    ])}
+
+    <div class="sectionTitle">🔁 補充周期一覧</div>
+    ${restockList.length ? tableForStores(restockList, [
+      {label:"店舗", render:r=>escapeHtml(r.name)},
+      {label:"都道府県", render:r=>escapeHtml(String(r.pref || "").trim() || "未設定")},
+      {label:"補充周期", render:r=>`${r._restock.toFixed(1)}日`},
+      {label:"強い曜日", render:r=>r._strongWeekdays.length ? r._strongWeekdays.join("/") : "—"}
+    ]) : `<div class="card"><div class="gray">補充周期を出すには、同じ店舗で2回以上の訪問ログが必要です。</div></div>`}
+
+    <div class="sectionTitle">🗂 カテゴリ集計（今月個数）</div>
+    ${Object.keys(categoryMap).length ? `
+      <table>
+        <thead>
+          <tr>
+            <th>カテゴリ</th>
+            <th>個数</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${Object.entries(categoryMap)
+            .sort((a,b)=>b[1]-a[1])
+            .map(([k,v])=>`
+              <tr>
+                <td>${escapeHtml(k)}</td>
+                <td>${v}</td>
+              </tr>
+            `).join("")}
+        </tbody>
+      </table>
+    ` : `<div class="card"><div class="gray">今月のカテゴリ個数ログはまだありません。</div></div>`}
+  `;
 }
 
-function render(){
-  const mode = document.getElementById("modeSelect").value;
-  const value = mode==="monthly"
-    ? document.getElementById("monthInput").value
-    : document.getElementById("dateInput").value;
-
-  const prefFilter = document.getElementById("prefSelect").value;
-  const stats = calcStoreStats(prefFilter);
-
-  const monthForCalendar = mode==="monthly"
-    ? document.getElementById("monthInput").value
-    : document.getElementById("dateInput").value.slice(0,7);
-
-  renderCalendar(monthForCalendar);
-  renderDayDetail(selectedCalendarDate);
-  renderSummary(mode, value, stats, prefFilter);
-  renderCategoryTable(mode, value);
-  renderPrefExpectedTable();
-  renderJudgeCards(stats);
-
-  tableRender(
-    "expectedTable",
-    [...stats].sort((a,b)=>b.expected-a.expected),
-    "expected"
-  );
-
-  tableRender(
-    "rateTable",
-    [...stats].sort((a,b)=>b.rate-a.rate),
-    "rate"
-  );
-
-  tableRender(
-    "profitTable",
-    [...stats].sort((a,b)=>b.profit-a.profit),
-    "profit"
-  );
-}
-
-initControls();
-render();
+(function init(){
+  buildMonthSelect();
+  buildPrefFilter();
+  renderReport();
+})();
 </script>
-
 </body>
 </html>
