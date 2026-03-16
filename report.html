@@ -95,11 +95,96 @@
     color:#666;
     font-size:14px;
   }
+
+  .calendarWrap{
+    margin-top:10px;
+  }
+  .calendarHead{
+    display:grid;
+    grid-template-columns:repeat(7, 1fr);
+    gap:6px;
+    margin-bottom:6px;
+  }
+  .calendarHead div{
+    text-align:center;
+    font-size:12px;
+    color:#667;
+    font-weight:700;
+  }
+  .calendarGrid{
+    display:grid;
+    grid-template-columns:repeat(7, 1fr);
+    gap:6px;
+  }
+  .dayCell{
+    min-height:62px;
+    border:none;
+    border-radius:12px;
+    background:#ffffff;
+    color:#223;
+    padding:8px 6px;
+    text-align:left;
+    font-size:14px;
+    position:relative;
+    box-shadow:0 1px 2px rgba(0,0,0,0.04);
+  }
+  .dayCell.empty{
+    background:transparent;
+    box-shadow:none;
+  }
+  .dayCell.hasData{
+    background:#fff8db;
+  }
+  .dayCell.good{
+    background:#ffe58f;
+  }
+  .dayCell.big{
+    background:#ffb3b3;
+  }
+  .dayCell.selected{
+    outline:2px solid #007aff;
+    outline-offset:0;
+  }
+  .dayNum{
+    font-weight:800;
+    font-size:15px;
+    line-height:1;
+  }
+  .dayMini{
+    margin-top:6px;
+    font-size:10px;
+    color:#556;
+    line-height:1.25;
+    word-break:break-word;
+  }
+  .legend{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-top:10px;
+  }
+  .legendItem{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12px;
+    color:#556;
+  }
+  .legendBox{
+    width:14px;
+    height:14px;
+    border-radius:4px;
+    background:#ffffff;
+    border:1px solid #dde5f0;
+  }
+  .legendBox.hasData{ background:#fff8db; }
+  .legendBox.good{ background:#ffe58f; }
+  .legendBox.big{ background:#ffb3b3; }
 </style>
 </head>
 <body>
 <h1>📊 分析画面</h1>
-<div class="sub">月次サマリー・日別一覧・曜日分析・ランキング・補充周期・カテゴリ集計をまとめて見る画面です。</div>
+<div class="sub">月次サマリー・月カレンダー・選択日の詳細・曜日分析・ランキング・補充周期・カテゴリ集計をまとめて見る画面です。</div>
 
 <div class="toolbar">
   <div class="row2">
@@ -110,8 +195,8 @@
 
 <div class="toolbar">
   <div class="row2">
-    <select id="monthSelect" onchange="renderReport()"></select>
-    <select id="prefFilter" onchange="renderReport()"></select>
+    <select id="monthSelect" onchange="selectedDate=''; renderReport()"></select>
+    <select id="prefFilter" onchange="selectedDate=''; renderReport()"></select>
   </div>
 </div>
 
@@ -123,6 +208,7 @@ const KEY_LOGS = "logs";
 
 let stores = JSON.parse(localStorage.getItem(KEY_STORES) || "[]");
 let logs = JSON.parse(localStorage.getItem(KEY_LOGS) || "[]");
+let selectedDate = "";
 
 function escapeHtml(str){
   return String(str)
@@ -144,6 +230,9 @@ function parseDateLocal(dateStr){
   const d = Number(parts[2]);
   if(!y || !m || !d) return null;
   return new Date(y, m - 1, d);
+}
+function formatDate(y,m,d){
+  return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
 }
 function getWeekdayJa(dateStr){
   const d = parseDateLocal(dateStr);
@@ -224,7 +313,6 @@ function buildMonthSelect(){
 
   const months = Array.from(set).sort().reverse();
   const current = sel.value || months[0];
-
   sel.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join("");
   if(months.includes(current)) sel.value = current;
 }
@@ -253,6 +341,69 @@ function getMonthLogs(month, storeIdsSet){
   return logs.filter(l => String(l.date || "").startsWith(month) && storeIdsSet.has(l.storeId));
 }
 
+function getCellClass(d){
+  if(!d) return "dayCell";
+  if((d.profit || 0) >= 100000) return "dayCell big";
+  if((d.success || 0) > 0 || (d.profit || 0) > 0) return "dayCell good";
+  if((d.visits || 0) > 0 || (d.items || 0) > 0) return "dayCell hasData";
+  return "dayCell";
+}
+
+function renderCalendar(month, dailyMap){
+  const [year, mon] = month.split("-").map(Number);
+  const first = new Date(year, mon - 1, 1);
+  const lastDay = new Date(year, mon, 0).getDate();
+  const firstWeekday = first.getDay();
+
+  let html = `
+    <div class="sectionTitle">🗓 月カレンダー</div>
+    <div class="card">
+      <div class="calendarHead">
+        <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
+      </div>
+      <div class="calendarGrid">
+  `;
+
+  for(let i=0;i<firstWeekday;i++){
+    html += `<div class="dayCell empty"></div>`;
+  }
+
+  for(let day=1; day<=lastDay; day++){
+    const date = formatDate(year, mon, day);
+    const d = dailyMap[date];
+    let cls = getCellClass(d);
+    if(selectedDate === date) cls += " selected";
+
+    const mini = d
+      ? `<div class="dayMini">利益 ${Number(d.profit || 0).toLocaleString()}円</div>`
+      : "";
+
+    html += `
+      <button class="${cls}" onclick="selectDate('${date}')">
+        <div class="dayNum">${day}</div>
+        ${mini}
+      </button>
+    `;
+  }
+
+  html += `
+      </div>
+      <div class="legend">
+        <div class="legendItem"><span class="legendBox"></span> データなし</div>
+        <div class="legendItem"><span class="legendBox hasData"></span> 訪問あり</div>
+        <div class="legendItem"><span class="legendBox good"></span> 成功・利益あり</div>
+        <div class="legendItem"><span class="legendBox big"></span> 利益10万円以上</div>
+      </div>
+    </div>
+  `;
+  return html;
+}
+
+function selectDate(date){
+  selectedDate = date;
+  renderReport();
+}
+
 function renderReport(){
   buildMonthSelect();
   buildPrefFilter();
@@ -261,7 +412,7 @@ function renderReport(){
   const filteredStores = getFilteredStores();
   const storeIdsSet = new Set(filteredStores.map(s => s.id));
   const monthLogs = getMonthLogs(month, storeIdsSet);
-
+  const storeMap = new Map(filteredStores.map(s => [s.id, s]));
   const reportArea = document.getElementById("reportArea");
 
   let monthProfit = 0;
@@ -288,41 +439,26 @@ function renderReport(){
     "日": {profit:0, visits:0, success:0}
   };
 
-  monthLogs.forEach(l=>{
-    const w = getWeekdayJa(l.date);
-    if(!weekdayMap[w]) return;
-    if(l.type === "profit") weekdayMap[w].profit += Number(l.delta) || 0;
-    if(l.type === "visit" && Number(l.delta) > 0) weekdayMap[w].visits += Number(l.delta) || 0;
-    if(l.type === "success" && Number(l.delta) > 0) weekdayMap[w].success += Number(l.delta) || 0;
-  });
-
   const dailyMap = {};
   monthLogs.forEach(l=>{
     const d = String(l.date || "");
     if(!d) return;
     if(!dailyMap[d]){
-      dailyMap[d] = {profit:0, visits:0, success:0, items:0};
+      dailyMap[d] = {profit:0, visits:0, success:0, items:0, storeIds:new Set()};
     }
     if(l.type === "profit") dailyMap[d].profit += Number(l.delta) || 0;
     if(l.type === "visit" && Number(l.delta) > 0) dailyMap[d].visits += Number(l.delta) || 0;
     if(l.type === "success" && Number(l.delta) > 0) dailyMap[d].success += Number(l.delta) || 0;
     if(l.type === "items" && Number(l.delta) > 0) dailyMap[d].items += Number(l.delta) || 0;
-  });
+    dailyMap[d].storeIds.add(l.storeId);
 
-  const dailyRows = Object.entries(dailyMap)
-    .sort((a,b)=>a[0] < b[0] ? 1 : -1)
-    .map(([date, v])=>{
-      const rate = v.visits > 0 ? (v.success / v.visits) * 100 : 0;
-      return {
-        date,
-        weekday: getWeekdayJa(date),
-        profit: v.profit,
-        visits: v.visits,
-        success: v.success,
-        items: v.items,
-        rate
-      };
-    });
+    const w = getWeekdayJa(l.date);
+    if(weekdayMap[w]){
+      if(l.type === "profit") weekdayMap[w].profit += Number(l.delta) || 0;
+      if(l.type === "visit" && Number(l.delta) > 0) weekdayMap[w].visits += Number(l.delta) || 0;
+      if(l.type === "success" && Number(l.delta) > 0) weekdayMap[w].success += Number(l.delta) || 0;
+    }
+  });
 
   const categoryMap = {};
   monthLogs.forEach(l=>{
@@ -348,9 +484,17 @@ function renderReport(){
   const topRate = enrichedStores.slice().sort((a,b)=>b._m.rate - a._m.rate).slice(0,10);
   const topAvgProfit = enrichedStores.slice().sort((a,b)=>b._m.avgProfit - a._m.avgProfit).slice(0,10);
   const topAvgItems = enrichedStores.slice().sort((a,b)=>b._m.avgItems - a._m.avgItems).slice(0,10);
-  const restockList = enrichedStores
-    .filter(s => typeof s._restock === "number")
-    .sort((a,b)=>a._restock - b._restock);
+  const restockList = enrichedStores.filter(s => typeof s._restock === "number").sort((a,b)=>a._restock - b._restock);
+
+  if(!selectedDate || !String(selectedDate).startsWith(month)){
+    const dates = Object.keys(dailyMap).sort();
+    selectedDate = dates.length ? dates[dates.length - 1] : "";
+  }
+
+  const selected = selectedDate ? dailyMap[selectedDate] : null;
+  const selectedStores = selected
+    ? Array.from(selected.storeIds).map(id => storeMap.get(id)).filter(Boolean)
+    : [];
 
   function tableForStores(rows, columns){
     return `
@@ -382,35 +526,38 @@ function renderReport(){
       </div>
     </div>
 
-    <div class="sectionTitle">📆 日別一覧</div>
-    ${dailyRows.length ? `
-      <table>
-        <thead>
-          <tr>
-            <th>日付</th>
-            <th>曜日</th>
-            <th>利益</th>
-            <th>訪問</th>
-            <th>成功</th>
-            <th>個数</th>
-            <th>成功率</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${dailyRows.map(r=>`
-            <tr>
-              <td>${escapeHtml(r.date)}</td>
-              <td>${r.weekday}</td>
-              <td>${r.profit.toLocaleString()}円</td>
-              <td>${r.visits}回</td>
-              <td>${r.success}回</td>
-              <td>${r.items}個</td>
-              <td>${r.rate.toFixed(1)}%</td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-    ` : `<div class="card"><div class="gray">この月の日別データはまだありません。</div></div>`}
+    ${renderCalendar(month, dailyMap)}
+
+    <div class="sectionTitle">📝 選択日の詳細 ${selectedDate ? `(${escapeHtml(selectedDate)} ${getWeekdayJa(selectedDate)})` : ""}</div>
+    <div class="card">
+      ${selected ? `
+        <div class="kv">
+          <div class="pill"><b>利益</b> ${selected.profit.toLocaleString()}円</div>
+          <div class="pill"><b>訪問</b> ${selected.visits}回</div>
+          <div class="pill"><b>成功</b> ${selected.success}回</div>
+          <div class="pill"><b>個数</b> ${selected.items}個</div>
+          <div class="pill"><b>成功率</b> ${selected.visits > 0 ? ((selected.success / selected.visits) * 100).toFixed(1) : "0.0"}%</div>
+        </div>
+        ${selectedStores.length ? `
+          <table>
+            <thead>
+              <tr>
+                <th>店舗</th>
+                <th>都道府県</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${selectedStores.map(s=>`
+                <tr>
+                  <td>${escapeHtml(s.name)}</td>
+                  <td>${escapeHtml(String(s.pref || "").trim() || "未設定")}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        ` : `<div class="gray">店舗データがありません。</div>`}
+      ` : `<div class="gray">この日のデータはありません。</div>`}
+    </div>
 
     <div class="sectionTitle">📅 曜日分析</div>
     <table>
