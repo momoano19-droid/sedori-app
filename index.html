@@ -24,7 +24,7 @@
     margin:0 0 10px 0;
   }
 
-  input,select,button{
+  input,select,button,textarea{
     padding:10px;
     margin:6px 0;
     width:100%;
@@ -93,7 +93,7 @@
     color:#111;
   }
   .meta{
-    line-height:1.6;
+    line-height:1.7;
     color:#222;
   }
   .gray{
@@ -276,7 +276,6 @@
     border-bottom:none;
   }
 
-  /* MAP */
   .mapWrap{
     display:none;
     margin-top:12px;
@@ -441,6 +440,8 @@
     ※ 住所を入れて「地図検索」を押すとGoogleマップ検索を開けます。<br>
     ※ Googleマップで店舗を開いたら「共有 → リンクをコピー」して共有リンク欄に貼ると安定します。<br>
     ※ 個数＋ を押すと「成功」も自動で +1 されます。<br>
+    ※ 補充周期は訪問日の間隔から自動計算します。<br>
+    ※ 強い曜日は訪問ログから自動集計します。<br>
     ※ 座標がない店舗は距離が「—」になりますが、ナビは使えます。
   </div>
 </div>
@@ -563,6 +564,31 @@ function tokyoDateStr(d=new Date()){
   return `${y}-${m}-${day}`;
 }
 
+function parseDateLocal(dateStr){
+  if(!dateStr) return null;
+  const parts = String(dateStr).split("-");
+  if(parts.length !== 3) return null;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if(!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function daysBetween(a, b){
+  const da = parseDateLocal(a);
+  const db = parseDateLocal(b);
+  if(!da || !db) return null;
+  const ms = Math.abs(db.getTime() - da.getTime());
+  return ms / (1000 * 60 * 60 * 24);
+}
+
+function getWeekdayJa(dateStr){
+  const d = parseDateLocal(dateStr);
+  if(!d) return "";
+  return ["日","月","火","水","木","金","土"][d.getDay()];
+}
+
 stores = stores.map(s => ({
   id: s.id || ensureId(),
   name: (s.name ?? "店舗").toString(),
@@ -610,6 +636,58 @@ function calcMetrics(s){
   const profitPerItem = items > 0 ? (profit / items) : 0;
 
   return {visits, success, items, profit, rate, avgProfit, expected, profitPerItem};
+}
+
+function getStoreVisitDates(storeId){
+  const dates = logs
+    .filter(x => x.storeId === storeId && x.type === "visit" && Number(x.delta) > 0 && x.date)
+    .map(x => x.date)
+    .sort();
+  return [...new Set(dates)];
+}
+
+function calcRestockCycle(storeId){
+  const dates = getStoreVisitDates(storeId);
+  if(dates.length < 2) return null;
+
+  const diffs = [];
+  for(let i=1; i<dates.length; i++){
+    const diff = daysBetween(dates[i-1], dates[i]);
+    if(typeof diff === "number" && diff > 0) diffs.push(diff);
+  }
+  if(!diffs.length) return null;
+  return diffs.reduce((a,b)=>a+b,0) / diffs.length;
+}
+
+function calcStrongWeekdays(storeId){
+  const visitDates = getStoreVisitDates(storeId);
+  if(!visitDates.length) return [];
+
+  const countMap = {};
+  visitDates.forEach(dateStr=>{
+    const w = getWeekdayJa(dateStr);
+    if(!w) return;
+    countMap[w] = (countMap[w] || 0) + 1;
+  });
+
+  const entries = Object.entries(countMap).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length) return [];
+  const max = entries[0][1];
+  return entries.filter(x => x[1] === max).map(x => x[0]);
+}
+
+function getStoreAdvancedMetrics(s){
+  const m = calcMetrics(s);
+  const avgItems = m.success > 0 ? (m.items / m.success) : 0;
+  const restockCycle = calcRestockCycle(s.id);
+  const strongWeekdays = calcStrongWeekdays(s.id);
+
+  return {
+    ...m,
+    avgItems,
+    restockCycle,
+    strongWeekdays
+  };
 }
 
 function extractLatLng(url){
@@ -1122,7 +1200,7 @@ function showMissingCoordsOnly(){
 
   const targets = stores
     .map((s, idx) => {
-      const m = calcMetrics(s);
+      const m = getStoreAdvancedMetrics(s);
       return {
         ...s,
         _idx: idx,
@@ -1396,7 +1474,7 @@ function render(){
   const sortType = document.getElementById("sortType").value;
 
   let view = stores.map((s, idx)=>{
-    const m = calcMetrics(s);
+    const m = getStoreAdvancedMetrics(s);
     let dist = null, score = null;
     if(lastPos && typeof s.lat === "number" && typeof s.lng === "number"){
       dist = distanceKm(lastPos.lat, lastPos.lng, s.lat, s.lng);
@@ -1487,6 +1565,9 @@ function renderStoreCard(s, forceNearbyBadge){
   const effText = (typeof s._score === "number") ? `${Math.round(s._score).toLocaleString()} 円/km` : "—";
   const catSum = categorySummary(s);
 
+  const restockText = m.restockCycle ? `${m.restockCycle.toFixed(1)}日` : "—";
+  const weekdayText = m.strongWeekdays.length ? m.strongWeekdays.join("/") : "—";
+
   const nearBadge = (forceNearbyBadge || s._isNearby) && typeof s._dist === "number"
     ? `<span class="badge near">📍近い ${s._dist.toFixed(1)}km</span>`
     : "";
@@ -1501,6 +1582,10 @@ function renderStoreCard(s, forceNearbyBadge){
           <div class="pill"><b>期待値</b> ${Math.round(m.expected).toLocaleString()}円</div>
           <div class="pill"><b>距離</b> ${distText}</div>
           <div class="pill"><b>個数</b> ${m.items}個 ${escapeHtml(catSum)}</div>
+          <div class="pill"><b>平均利益</b> ${Math.round(m.avgProfit).toLocaleString()}円</div>
+          <div class="pill"><b>平均個数</b> ${m.avgItems.toFixed(1)}個</div>
+          <div class="pill"><b>補充周期</b> ${restockText}</div>
+          <div class="pill"><b>強い曜日</b> ${weekdayText}</div>
           <div class="pill"><b>ルート効率</b> ${effText}</div>
         </div>
         <div class="grid" style="margin-top:10px;">
@@ -1519,8 +1604,11 @@ function renderStoreCard(s, forceNearbyBadge){
           <div class="pill"><b>期待値</b> ${Math.round(m.expected).toLocaleString()}円</div>
           <div class="pill"><b>成功率</b> ${m.rate.toFixed(1)}%</div>
           <div class="pill"><b>平均利益</b> ${Math.round(m.avgProfit).toLocaleString()}円</div>
+          <div class="pill"><b>平均個数</b> ${m.avgItems.toFixed(1)}個</div>
           <div class="pill"><b>距離</b> ${distText}</div>
           <div class="pill"><b>ルート効率</b> ${effText}</div>
+          <div class="pill"><b>補充周期</b> ${restockText}</div>
+          <div class="pill"><b>強い曜日</b> ${weekdayText}</div>
           <div class="pill"><b>個数</b> ${m.items}個 ${escapeHtml(catSum)}</div>
         </div>
         <div class="grid" style="margin-top:10px;">
@@ -1538,6 +1626,10 @@ function renderStoreCard(s, forceNearbyBadge){
         <div class="kv">
           <div class="pill"><b>期待値</b> ${Math.round(m.expected).toLocaleString()}円</div>
           <div class="pill"><b>成功率</b> ${m.rate.toFixed(1)}%</div>
+          <div class="pill"><b>平均利益</b> ${Math.round(m.avgProfit).toLocaleString()}円</div>
+          <div class="pill"><b>平均個数</b> ${m.avgItems.toFixed(1)}個</div>
+          <div class="pill"><b>補充周期</b> ${restockText}</div>
+          <div class="pill"><b>強い曜日</b> ${weekdayText}</div>
           <div class="pill"><b>距離</b> ${distText}</div>
           <div class="pill"><b>ルート効率</b> ${effText}</div>
           <div class="pill"><b>個数</b> ${m.items}個 ${escapeHtml(catSum)}</div>
@@ -1564,8 +1656,9 @@ function renderStoreCard(s, forceNearbyBadge){
       <div class="meta">
         訪問：${m.visits}回 / 成功：${m.success}回 / 個数：${m.items}個 ${escapeHtml(catSum)}<br>
         利益：${m.profit.toLocaleString()}円 / 成功率：${m.rate.toFixed(1)}%<br>
-        平均利益：${Math.round(m.avgProfit).toLocaleString()}円 / <b>期待値：${Math.round(m.expected).toLocaleString()}円</b><br>
-        1商品あたり利益：${Math.round(m.profitPerItem).toLocaleString()}円<br>
+        平均利益：${Math.round(m.avgProfit).toLocaleString()}円 / 平均個数：${m.avgItems.toFixed(1)}個<br>
+        <b>期待値：${Math.round(m.expected).toLocaleString()}円</b> / 1商品あたり利益：${Math.round(m.profitPerItem).toLocaleString()}円<br>
+        補充周期目安：${m.restockCycle ? `${m.restockCycle.toFixed(1)}日` : "データ不足"} / 強い曜日：${m.strongWeekdays.length ? m.strongWeekdays.join(" / ") : "集計中"}<br>
         距離：${distText} / <b>ルート効率：${effText}</b>
       </div>
 
@@ -1612,7 +1705,6 @@ function renderTodayPlan(){
   area.innerHTML = html;
 }
 
-/* MAP */
 function toggleMapPanel(){
   const wrap = document.getElementById("mapWrap");
   mapPanelOpen = !mapPanelOpen;
@@ -1685,7 +1777,7 @@ function renderMapMarkers(){
 
   const visibleStores = stores
     .map((s, idx)=>{
-      const m = calcMetrics(s);
+      const m = getStoreAdvancedMetrics(s);
       return {...s, _idx:idx, _m:m};
     })
     .filter(s=>typeof s.lat === "number" && typeof s.lng === "number")
@@ -1710,7 +1802,10 @@ function renderMapMarkers(){
         ${escapeHtml((s.pref || "").trim() || "未設定")}<br>
         期待値：${Math.round(s._m.expected).toLocaleString()}円<br>
         成功率：${s._m.rate.toFixed(1)}%<br>
-        利益：${s._m.profit.toLocaleString()}円
+        平均利益：${Math.round(s._m.avgProfit).toLocaleString()}円<br>
+        平均個数：${s._m.avgItems.toFixed(1)}個<br>
+        補充周期：${s._m.restockCycle ? `${s._m.restockCycle.toFixed(1)}日` : "—"}<br>
+        強い曜日：${s._m.strongWeekdays.length ? s._m.strongWeekdays.join("/") : "—"}
       </div>
       ${navUrl ? `<a class="mapPopupBtn" href="${navUrl}" target="_blank" rel="noopener">ナビ</a>` : ""}
     `;
@@ -1765,7 +1860,7 @@ function buildTodayRoute(){
       const start = {lat:lastPos.lat, lng:lastPos.lng};
 
       const targets = stores
-        .map((s,idx)=>({...s,_idx:idx,_m:calcMetrics(s)}))
+        .map((s,idx)=>({...s,_idx:idx,_m:getStoreAdvancedMetrics(s)}))
         .filter(s=>s.today)
         .filter(s=>typeof s.lat==="number" && typeof s.lng==="number");
 
