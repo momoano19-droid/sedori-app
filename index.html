@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>せどりGPS管理PRO</title>
 
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+
 <style>
   :root{
     --btn-font: 16px;
@@ -126,6 +131,12 @@
     color:#a8071a;
     border:1px solid #ffa39e;
   }
+  .badge.map{
+    background:#eef6ff;
+    color:#0b4ea2;
+    border:1px solid #b7d4ff;
+  }
+
   .kv{
     display:flex;
     gap:8px;
@@ -267,6 +278,82 @@
   .allocLine:last-child{
     border-bottom:none;
   }
+
+  /* MAP */
+  .mapWrap{
+    display:none;
+    margin-top:12px;
+  }
+  .mapWrap.show{
+    display:block;
+  }
+  #map{
+    width:100%;
+    height:420px;
+    border-radius:12px;
+    overflow:hidden;
+    border:1px solid #dfe6f2;
+  }
+  .mapLegend{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-top:10px;
+  }
+  .legendItem{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:13px;
+    color:#334;
+  }
+  .legendDot{
+    width:14px;
+    height:14px;
+    border-radius:50%;
+    border:2px solid #fff;
+    box-shadow:0 0 0 1px rgba(0,0,0,0.15);
+  }
+  .legendDot.high{background:#ff4d4f;}
+  .legendDot.mid{background:#faad14;}
+  .legendDot.low{background:#1677ff;}
+
+  .mapPopupTitle{
+    font-weight:800;
+    font-size:15px;
+    margin-bottom:4px;
+  }
+  .mapPopupMeta{
+    font-size:12px;
+    line-height:1.5;
+    color:#334;
+  }
+  .mapPopupBtn{
+    display:inline-block;
+    margin-top:8px;
+    padding:6px 10px;
+    border-radius:999px;
+    background:#007aff;
+    color:#fff;
+    text-decoration:none;
+    font-size:12px;
+  }
+
+  .marker-pin{
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    border:3px solid #fff;
+    box-shadow:0 2px 8px rgba(0,0,0,0.25);
+  }
+  .marker-high{ background:#ff4d4f; }
+  .marker-mid{ background:#faad14; }
+  .marker-low{ background:#1677ff; }
+
+  .leaflet-div-icon{
+    background:transparent;
+    border:none;
+  }
 </style>
 </head>
 
@@ -317,6 +404,23 @@
   <div class="row2">
     <button class="secondary" onclick="retryMissingCoords()">📡 座標なし店舗を一括再取得</button>
     <button class="secondary" onclick="showMissingCoordsOnly()">📍 座標なし店舗を見る</button>
+  </div>
+
+  <div class="row2">
+    <button class="secondary" onclick="toggleMapPanel()">🗺 店舗MAP</button>
+    <button class="secondary" onclick="moveMapToCurrentLocation()">📍 現在地へ移動</button>
+  </div>
+
+  <div id="mapWrap" class="mapWrap">
+    <div id="map"></div>
+    <div class="mapLegend">
+      <div class="legendItem"><span class="legendDot high"></span>高期待値</div>
+      <div class="legendItem"><span class="legendDot mid"></span>中間</div>
+      <div class="legendItem"><span class="legendDot low"></span>低め</div>
+    </div>
+    <div class="gray" style="margin-top:8px;">
+      ※ 座標が入っている店舗だけMAPに表示されます。
+    </div>
   </div>
 
   <div class="row2" style="margin-top:8px;">
@@ -412,6 +516,7 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const QUICK_LIMIT = 12;
 const CHIP_LIMIT = 24;
@@ -427,6 +532,11 @@ let layout = localStorage.getItem(KEY_LAYOUT) || "detail";
 let lastPos = null;
 let nearbyMode = false;
 let nearbyStoreIds = new Set();
+
+let map = null;
+let mapMarkers = [];
+let mapInitialized = false;
+let mapPanelOpen = false;
 
 function escapeHtml(str){
   return String(str)
@@ -1125,6 +1235,7 @@ function optimizeRoute(){
       document.getElementById("sortType").value = "route";
       render();
       renderTodayPlan();
+      renderMapMarkers();
     },
     ()=>{ alert("位置情報が取得できませんでした。"); },
     {enableHighAccuracy:true, timeout:10000}
@@ -1152,6 +1263,7 @@ function showNearbyStores(){
 
       nearbyMode = true;
       render();
+      renderMapMarkers();
     },
     ()=>{ alert("位置情報が取得できませんでした。"); },
     {enableHighAccuracy:true, timeout:10000}
@@ -1190,6 +1302,7 @@ function bulkSetTodayByPref(prefValue, on){
   saveAll();
   render();
   renderTodayPlan();
+  renderMapMarkers();
 }
 function todayBulkOn(){
   bulkSetTodayByPref(document.getElementById("todayPrefSelect").value, true);
@@ -1232,13 +1345,13 @@ function setLayout(v){
   render();
 }
 function applyLayoutButtonState(){
-  const map = {
+  const mapBtn = {
     detail: "layoutDetailBtn",
     compact: "layoutCompactBtn",
     list: "layoutListBtn",
     analysis: "layoutAnalysisBtn",
   };
-  Object.entries(map).forEach(([k,id])=>{
+  Object.entries(mapBtn).forEach(([k,id])=>{
     const el = document.getElementById(id);
     if(!el) return;
     if(layout === k) el.classList.remove("secondary");
@@ -1256,7 +1369,7 @@ function buildCardHeader(s, i, extraBadgesHtml=""){
     <div>
       <span class="badge">${escapeHtml((s.pref || "").trim() || "未設定")}</span>
       ${(s.address || "").trim() ? `<span class="badge addr">📍 住所あり</span>` : ""}
-      ${!(typeof s.lat === "number" && typeof s.lng === "number") ? `<span class="badge noCoord">座標なし</span>` : ""}
+      ${!(typeof s.lat === "number" && typeof s.lng === "number") ? `<span class="badge noCoord">座標なし</span>` : `<span class="badge map">MAP表示可</span>`}
       ${(s.defaultCategory || "").trim() ? `<span class="badge">カテゴリ:${escapeHtml(s.defaultCategory.trim())}</span>` : ""}
       ${s.lastVisitDate ? `<span class="badge">最終訪問:${escapeHtml(s.lastVisitDate)}</span>` : ""}
       ${s.today ? `<span class="badge">今日行く</span>` : ""}
@@ -1318,6 +1431,8 @@ function render(){
     }else{
       others.forEach(s => list.innerHTML += renderStoreCard(s, false));
     }
+
+    renderMapMarkers();
     return;
   }
 
@@ -1360,6 +1475,8 @@ function render(){
   if(list.innerHTML.trim() === ""){
     list.innerHTML = `<div class="gray" style="margin-top:14px;">該当する店舗がありません。</div>`;
   }
+
+  renderMapMarkers();
 }
 
 function renderStoreCard(s, forceNearbyBadge){
@@ -1494,6 +1611,151 @@ function renderTodayPlan(){
   area.innerHTML = html;
 }
 
+/* =========================
+   MAP
+========================= */
+function toggleMapPanel(){
+  const wrap = document.getElementById("mapWrap");
+  mapPanelOpen = !mapPanelOpen;
+  wrap.classList.toggle("show", mapPanelOpen);
+
+  if(mapPanelOpen){
+    initMap();
+    setTimeout(()=>{
+      if(map) map.invalidateSize();
+      renderMapMarkers();
+    }, 80);
+  }
+}
+
+function initMap(){
+  if(mapInitialized) return;
+
+  map = L.map("map", {
+    zoomControl: true
+  }).setView([35.681236, 139.767125], 6);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+
+  mapInitialized = true;
+}
+
+function getMarkerColorByExpected(expected){
+  if(expected >= 2000) return "high";
+  if(expected >= 800) return "mid";
+  return "low";
+}
+
+function makeMarkerIcon(level){
+  return L.divIcon({
+    html: `<div class="marker-pin marker-${level}"></div>`,
+    className: "",
+    iconSize: [18,18],
+    iconAnchor: [9,9],
+    popupAnchor: [0,-10]
+  });
+}
+
+function clearMapMarkers(){
+  mapMarkers.forEach(m => map.removeLayer(m));
+  mapMarkers = [];
+}
+
+function navigateUrlForStore(s){
+  if(typeof s.lat === "number" && typeof s.lng === "number"){
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.lat + "," + s.lng)}&travelmode=driving`;
+  }
+  if((s.address || "").trim()){
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address.trim())}`;
+  }
+  return "";
+}
+
+function renderMapMarkers(){
+  if(!mapInitialized) return;
+
+  clearMapMarkers();
+
+  const q = (document.getElementById("q").value || "").trim();
+  const prefFilter = document.getElementById("prefFilter").value;
+  const minExpected = clampNonNeg(parseFloat(document.getElementById("minExpected").value || "0"));
+  const minRate = clampNonNeg(parseFloat(document.getElementById("minRate").value || "0"));
+
+  const visibleStores = stores
+    .map((s, idx)=>{
+      const m = calcMetrics(s);
+      return {...s, _idx:idx, _m:m};
+    })
+    .filter(s=>typeof s.lat === "number" && typeof s.lng === "number")
+    .filter(s=>matchesQuery(s,q))
+    .filter(s=>prefFilter === "__ALL__" ? true : (s.pref || "").trim() === prefFilter)
+    .filter(s=>s._m.expected >= minExpected && s._m.rate >= minRate);
+
+  if(visibleStores.length === 0){
+    return;
+  }
+
+  const bounds = [];
+
+  visibleStores.forEach(s=>{
+    const level = getMarkerColorByExpected(s._m.expected);
+    const marker = L.marker([s.lat, s.lng], { icon: makeMarkerIcon(level) });
+
+    const navUrl = navigateUrlForStore(s);
+    const popup = `
+      <div class="mapPopupTitle">${escapeHtml(s.name)}</div>
+      <div class="mapPopupMeta">
+        ${escapeHtml((s.pref || "").trim() || "未設定")}<br>
+        期待値：${Math.round(s._m.expected).toLocaleString()}円<br>
+        成功率：${s._m.rate.toFixed(1)}%<br>
+        利益：${s._m.profit.toLocaleString()}円
+      </div>
+      ${navUrl ? `<a class="mapPopupBtn" href="${navUrl}" target="_blank" rel="noopener">ナビ</a>` : ""}
+    `;
+
+    marker.bindPopup(popup);
+    marker.addTo(map);
+    mapMarkers.push(marker);
+    bounds.push([s.lat, s.lng]);
+  });
+
+  if(bounds.length === 1){
+    map.setView(bounds[0], 15);
+  }else{
+    map.fitBounds(bounds, { padding:[30,30] });
+  }
+}
+
+function moveMapToCurrentLocation(){
+  if(!navigator.geolocation){
+    alert("この端末では位置情報が使えません。");
+    return;
+  }
+  if(!mapInitialized){
+    mapPanelOpen = true;
+    document.getElementById("mapWrap").classList.add("show");
+    initMap();
+    setTimeout(()=>map.invalidateSize(), 80);
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>{
+      lastPos = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+      map.setView([lastPos.lat, lastPos.lng], 15);
+      renderMapMarkers();
+    },
+    ()=>{
+      alert("現在地を取得できませんでした。");
+    },
+    {enableHighAccuracy:true, timeout:10000}
+  );
+}
+
+/* =========================
+   TODAY ROUTE
+========================= */
 function buildTodayRoute(){
   if(!navigator.geolocation){
     alert("この端末では位置情報が使えません。");
@@ -1591,6 +1853,7 @@ function buildTodayRoute(){
       });
 
       area.innerHTML = html;
+      renderMapMarkers();
     },
     ()=>{ alert("位置情報が取得できませんでした。"); },
     {enableHighAccuracy:true, timeout:10000}
