@@ -5,10 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>せどりGPS管理PRO</title>
 
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
   :root{
@@ -314,9 +311,10 @@
     border:2px solid #fff;
     box-shadow:0 0 0 1px rgba(0,0,0,0.15);
   }
-  .legendDot.high{background:#ff4d4f;}
-  .legendDot.mid{background:#faad14;}
-  .legendDot.low{background:#1677ff;}
+  .legendDot.red{background:#ff4d4f;}
+  .legendDot.orange{background:#fa8c16;}
+  .legendDot.yellow{background:#fadb14;}
+  .legendDot.blue{background:#1677ff;}
 
   .mapPopupTitle{
     font-weight:800;
@@ -346,9 +344,10 @@
     border:3px solid #fff;
     box-shadow:0 2px 8px rgba(0,0,0,0.25);
   }
-  .marker-high{ background:#ff4d4f; }
-  .marker-mid{ background:#faad14; }
-  .marker-low{ background:#1677ff; }
+  .marker-red{background:#ff4d4f;}
+  .marker-orange{background:#fa8c16;}
+  .marker-yellow{background:#fadb14;}
+  .marker-blue{background:#1677ff;}
 
   .leaflet-div-icon{
     background:transparent;
@@ -414,9 +413,10 @@
   <div id="mapWrap" class="mapWrap">
     <div id="map"></div>
     <div class="mapLegend">
-      <div class="legendItem"><span class="legendDot high"></span>高期待値</div>
-      <div class="legendItem"><span class="legendDot mid"></span>中間</div>
-      <div class="legendItem"><span class="legendDot low"></span>低め</div>
+      <div class="legendItem"><span class="legendDot red"></span>期待値 3000円以上</div>
+      <div class="legendItem"><span class="legendDot orange"></span>期待値 1500〜2999円</div>
+      <div class="legendItem"><span class="legendDot yellow"></span>期待値 800〜1499円</div>
+      <div class="legendItem"><span class="legendDot blue"></span>期待値 799円以下</div>
     </div>
     <div class="gray" style="margin-top:8px;">
       ※ 座標が入っている店舗だけMAPに表示されます。
@@ -1152,6 +1152,7 @@ function toggleToday(i, checked){
   stores[i].today = !!checked;
   saveAll();
   renderTodayPlan();
+  renderMapMarkers();
 }
 
 function visit(i){
@@ -1611,9 +1612,7 @@ function renderTodayPlan(){
   area.innerHTML = html;
 }
 
-/* =========================
-   MAP
-========================= */
+/* MAP */
 function toggleMapPanel(){
   const wrap = document.getElementById("mapWrap");
   mapPanelOpen = !mapPanelOpen;
@@ -1642,10 +1641,11 @@ function initMap(){
   mapInitialized = true;
 }
 
-function getMarkerColorByExpected(expected){
-  if(expected >= 2000) return "high";
-  if(expected >= 800) return "mid";
-  return "low";
+function getMarkerLevel(expected){
+  if(expected >= 3000) return "red";
+  if(expected >= 1500) return "orange";
+  if(expected >= 800) return "yellow";
+  return "blue";
 }
 
 function makeMarkerIcon(level){
@@ -1700,7 +1700,7 @@ function renderMapMarkers(){
   const bounds = [];
 
   visibleStores.forEach(s=>{
-    const level = getMarkerColorByExpected(s._m.expected);
+    const level = getMarkerLevel(s._m.expected);
     const marker = L.marker([s.lat, s.lng], { icon: makeMarkerIcon(level) });
 
     const navUrl = navigateUrlForStore(s);
@@ -1753,9 +1753,6 @@ function moveMapToCurrentLocation(){
   );
 }
 
-/* =========================
-   TODAY ROUTE
-========================= */
 function buildTodayRoute(){
   if(!navigator.geolocation){
     alert("この端末では位置情報が使えません。");
