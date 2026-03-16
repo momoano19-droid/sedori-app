@@ -99,7 +99,7 @@
 </head>
 <body>
 <h1>📊 分析画面</h1>
-<div class="sub">月次サマリー・曜日分析・ランキング・補充周期・カテゴリ集計をまとめて見る画面です。</div>
+<div class="sub">月次サマリー・日別一覧・曜日分析・ランキング・補充周期・カテゴリ集計をまとめて見る画面です。</div>
 
 <div class="toolbar">
   <div class="row2">
@@ -264,8 +264,6 @@ function renderReport(){
 
   const reportArea = document.getElementById("reportArea");
 
-  const storeMap = new Map(filteredStores.map(s => [s.id, s]));
-
   let monthProfit = 0;
   let monthVisits = 0;
   let monthSuccess = 0;
@@ -297,6 +295,34 @@ function renderReport(){
     if(l.type === "visit" && Number(l.delta) > 0) weekdayMap[w].visits += Number(l.delta) || 0;
     if(l.type === "success" && Number(l.delta) > 0) weekdayMap[w].success += Number(l.delta) || 0;
   });
+
+  const dailyMap = {};
+  monthLogs.forEach(l=>{
+    const d = String(l.date || "");
+    if(!d) return;
+    if(!dailyMap[d]){
+      dailyMap[d] = {profit:0, visits:0, success:0, items:0};
+    }
+    if(l.type === "profit") dailyMap[d].profit += Number(l.delta) || 0;
+    if(l.type === "visit" && Number(l.delta) > 0) dailyMap[d].visits += Number(l.delta) || 0;
+    if(l.type === "success" && Number(l.delta) > 0) dailyMap[d].success += Number(l.delta) || 0;
+    if(l.type === "items" && Number(l.delta) > 0) dailyMap[d].items += Number(l.delta) || 0;
+  });
+
+  const dailyRows = Object.entries(dailyMap)
+    .sort((a,b)=>a[0] < b[0] ? 1 : -1)
+    .map(([date, v])=>{
+      const rate = v.visits > 0 ? (v.success / v.visits) * 100 : 0;
+      return {
+        date,
+        weekday: getWeekdayJa(date),
+        profit: v.profit,
+        visits: v.visits,
+        success: v.success,
+        items: v.items,
+        rate
+      };
+    });
 
   const categoryMap = {};
   monthLogs.forEach(l=>{
@@ -355,6 +381,36 @@ function renderReport(){
         <div class="pill"><b>今月成功率</b> ${monthRate.toFixed(1)}%</div>
       </div>
     </div>
+
+    <div class="sectionTitle">📆 日別一覧</div>
+    ${dailyRows.length ? `
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>曜日</th>
+            <th>利益</th>
+            <th>訪問</th>
+            <th>成功</th>
+            <th>個数</th>
+            <th>成功率</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${dailyRows.map(r=>`
+            <tr>
+              <td>${escapeHtml(r.date)}</td>
+              <td>${r.weekday}</td>
+              <td>${r.profit.toLocaleString()}円</td>
+              <td>${r.visits}回</td>
+              <td>${r.success}回</td>
+              <td>${r.items}個</td>
+              <td>${r.rate.toFixed(1)}%</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    ` : `<div class="card"><div class="gray">この月の日別データはまだありません。</div></div>`}
 
     <div class="sectionTitle">📅 曜日分析</div>
     <table>
