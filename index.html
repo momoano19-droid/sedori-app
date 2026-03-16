@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>せどりGPS管理PRO</title>
-
+<title>店舗管理 | せどりGPS管理PRO</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
@@ -15,16 +14,22 @@
   }
 
   body{
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     padding:16px;
     background:#f4f6f8;
+    color:#222;
   }
   h1{
-    font-size:20px;
-    margin:0 0 10px 0;
+    font-size:22px;
+    margin:0 0 6px 0;
+  }
+  .sub{
+    color:#667;
+    font-size:13px;
+    margin-bottom:12px;
   }
 
-  input,select,button,textarea{
+  input,select,button{
     padding:10px;
     margin:6px 0;
     width:100%;
@@ -53,6 +58,7 @@
     border-radius:var(--btn-radius);
     padding:var(--btn-pad);
     font-size:var(--btn-font);
+    box-sizing:border-box;
   }
 
   .toolbar{
@@ -86,7 +92,7 @@
     margin-top:12px;
   }
   .storeTitle{
-    font-size:24px;
+    font-size:22px;
     font-weight:900;
     line-height:1.2;
     margin-bottom:6px;
@@ -167,6 +173,24 @@
     color:#223;
   }
 
+  .addrRow{
+    display:flex;
+    gap:8px;
+    align-items:flex-start;
+    margin-top:4px;
+  }
+  .addrText{
+    flex:1;
+    min-width:0;
+  }
+  .addrCopyBtn{
+    width:auto !important;
+    flex:0 0 auto;
+    padding:4px 10px !important;
+    font-size:12px !important;
+    line-height:1.2;
+  }
+
   table{
     width:100%;
     border-collapse:collapse;
@@ -188,24 +212,6 @@
   }
   tr:last-child td{
     border-bottom:none;
-  }
-
-  .addrRow{
-    display:flex;
-    gap:8px;
-    align-items:flex-start;
-    margin-top:4px;
-  }
-  .addrText{
-    flex:1;
-    min-width:0;
-  }
-  .addrCopyBtn{
-    width:auto !important;
-    flex:0 0 auto;
-    padding:4px 10px !important;
-    font-size:12px !important;
-    line-height:1.2;
   }
 
   .overlay{
@@ -356,21 +362,35 @@
 </head>
 
 <body>
-<h1>せどりGPS管理PRO</h1>
+<h1>📱 店舗管理</h1>
+<div class="sub">現場で使う画面です。店舗登録・一覧・地図・近くの店舗・今日ルートをここで操作します。</div>
 
-<div class="row2">
-  <input id="storeName" placeholder="店舗名を入力">
-  <input id="prefName" placeholder="都道府県（例：茨城県）">
+<div class="toolbar">
+  <div class="row2">
+    <button onclick="location.href='report.html'">📊 分析画面へ</button>
+    <button class="secondary" onclick="clearNearbyMode(); render();">再表示</button>
+  </div>
 </div>
 
-<input id="address" placeholder="住所（これだけでもOK）">
+<div class="toolbar">
+  <div class="row2">
+    <input id="storeName" placeholder="店舗名を入力">
+    <input id="prefName" placeholder="都道府県（例：茨城県）">
+  </div>
 
-<div class="row2">
-  <input id="mapUrl" placeholder="Googleマップ共有リンク（任意）">
-  <button class="secondary" onclick="openMapSearchFromAddress()">地図検索</button>
+  <input id="address" placeholder="住所（これだけでもOK）">
+
+  <div class="row2">
+    <input id="mapUrl" placeholder="Googleマップ共有リンク（任意）">
+    <button class="secondary" onclick="openMapSearchFromAddress()">地図検索</button>
+  </div>
+
+  <button onclick="addStore()">店舗追加</button>
+
+  <div class="gray">
+    ※ Googleマップで店舗を開いて「共有 → リンクをコピー」すると座標が安定しやすいです。
+  </div>
 </div>
-
-<button onclick="addStore()">店舗追加</button>
 
 <div class="toolbar">
   <div class="row2">
@@ -412,16 +432,18 @@
   <div id="mapWrap" class="mapWrap">
     <div id="map"></div>
     <div class="mapLegend">
-      <div class="legendItem"><span class="legendDot red"></span>期待値 3000円以上</div>
-      <div class="legendItem"><span class="legendDot orange"></span>期待値 1500〜2999円</div>
-      <div class="legendItem"><span class="legendDot yellow"></span>期待値 800〜1499円</div>
-      <div class="legendItem"><span class="legendDot blue"></span>期待値 799円以下</div>
+      <div class="legendItem"><span class="legendDot red"></span>期待値 10000円以上</div>
+      <div class="legendItem"><span class="legendDot orange"></span>期待値 3000〜9999円</div>
+      <div class="legendItem"><span class="legendDot yellow"></span>期待値 1000〜2999円</div>
+      <div class="legendItem"><span class="legendDot blue"></span>期待値 999円以下</div>
     </div>
     <div class="gray" style="margin-top:8px;">
       ※ 座標が入っている店舗だけMAPに表示されます。
     </div>
   </div>
+</div>
 
+<div class="toolbar">
   <div class="row2" style="margin-top:8px;">
     <button id="layoutDetailBtn" class="secondary" onclick="setLayout('detail')">詳細</button>
     <button id="layoutCompactBtn" class="secondary" onclick="setLayout('compact')">コンパクト</button>
@@ -429,46 +451,6 @@
   <div class="row2">
     <button id="layoutListBtn" class="secondary" onclick="setLayout('list')">リスト</button>
     <button id="layoutAnalysisBtn" class="secondary" onclick="setLayout('analysis')">分析</button>
-  </div>
-
-  <div class="row2">
-    <button onclick="location.href='report.html'">📊 レポート</button>
-    <button class="secondary" onclick="clearNearbyMode(); render();">再表示</button>
-  </div>
-
-  <div class="gray">
-    ※ 住所を入れて「地図検索」を押すとGoogleマップ検索を開けます。<br>
-    ※ Googleマップで店舗を開いたら「共有 → リンクをコピー」して共有リンク欄に貼ると安定します。<br>
-    ※ 個数＋ を押すと「成功」も自動で +1 されます。<br>
-    ※ 補充周期は訪問日の間隔から自動計算します。<br>
-    ※ 強い曜日は訪問ログから自動集計します。<br>
-    ※ 座標がない店舗は距離が「—」になりますが、ナビは使えます。
-  </div>
-</div>
-
-<div class="toolbar">
-  <div class="row2" style="align-items:center;">
-    <div style="font-weight:800;">⚙️ ボタン表示設定</div>
-    <button id="toggleBtnSettingBtn" onclick="toggleBtnSetting()">非表示</button>
-  </div>
-
-  <div id="btnSettingWrap">
-    <div class="row2">
-      <div>
-        <div class="gray">文字サイズ</div>
-        <input id="btnFont" type="range" min="12" max="24" value="16" oninput="updateBtnStyle()">
-      </div>
-      <div>
-        <div class="gray">ボタン高さ（余白）</div>
-        <input id="btnPad" type="range" min="6" max="20" value="10" oninput="updateBtnStyle()">
-      </div>
-    </div>
-
-    <div>
-      <div class="gray">角丸（R）</div>
-      <input id="btnRadius" type="range" min="6" max="28" value="10" oninput="updateBtnStyle()">
-    </div>
-    <div class="gray">※ 変更は自動保存されます</div>
   </div>
 </div>
 
@@ -524,8 +506,6 @@ const CHIP_LIMIT = 24;
 const KEY_STORES = "stores";
 const KEY_LOGS = "logs";
 const KEY_LAYOUT = "layout";
-const KEY_BTN_STYLE = "btnStyle";
-const KEY_BTN_VISIBLE = "btn_setting_visible";
 
 let stores = JSON.parse(localStorage.getItem(KEY_STORES) || "[]");
 let logs = JSON.parse(localStorage.getItem(KEY_LOGS) || "[]");
@@ -553,7 +533,6 @@ function clampNonNeg(n){
 function ensureId(){
   return (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2));
 }
-
 function tokyoDateStr(d=new Date()){
   const parts = new Intl.DateTimeFormat('ja-JP', {
     timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit'
@@ -563,7 +542,6 @@ function tokyoDateStr(d=new Date()){
   const day = parts.find(p=>p.type==='day').value;
   return `${y}-${m}-${day}`;
 }
-
 function parseDateLocal(dateStr){
   if(!dateStr) return null;
   const parts = String(dateStr).split("-");
@@ -574,15 +552,12 @@ function parseDateLocal(dateStr){
   if(!y || !m || !d) return null;
   return new Date(y, m - 1, d);
 }
-
 function daysBetween(a, b){
   const da = parseDateLocal(a);
   const db = parseDateLocal(b);
   if(!da || !db) return null;
-  const ms = Math.abs(db.getTime() - da.getTime());
-  return ms / (1000 * 60 * 60 * 24);
+  return Math.abs(db - da) / (1000 * 60 * 60 * 24);
 }
-
 function getWeekdayJa(dateStr){
   const d = parseDateLocal(dateStr);
   if(!d) return "";
@@ -613,12 +588,10 @@ function saveAll(){
   localStorage.setItem(KEY_LOGS, JSON.stringify(logs));
   localStorage.setItem(KEY_LAYOUT, layout);
 }
-
 function addLog(storeId, type, delta, category=null){
   const rec = { date: tokyoDateStr(), storeId, type, delta: Number(delta) || 0 };
-  if(category!==null && category!==undefined){
-    const c = String(category).trim();
-    if(c) rec.category = c;
+  if(category){
+    rec.category = String(category).trim();
   }
   logs.push(rec);
   saveAll();
@@ -649,9 +622,8 @@ function getStoreVisitDates(storeId){
 function calcRestockCycle(storeId){
   const dates = getStoreVisitDates(storeId);
   if(dates.length < 2) return null;
-
   const diffs = [];
-  for(let i=1; i<dates.length; i++){
+  for(let i=1;i<dates.length;i++){
     const diff = daysBetween(dates[i-1], dates[i]);
     if(typeof diff === "number" && diff > 0) diffs.push(diff);
   }
@@ -662,14 +634,12 @@ function calcRestockCycle(storeId){
 function calcStrongWeekdays(storeId){
   const visitDates = getStoreVisitDates(storeId);
   if(!visitDates.length) return [];
-
   const countMap = {};
   visitDates.forEach(dateStr=>{
     const w = getWeekdayJa(dateStr);
     if(!w) return;
     countMap[w] = (countMap[w] || 0) + 1;
   });
-
   const entries = Object.entries(countMap).sort((a,b)=>b[1]-a[1]);
   if(!entries.length) return [];
   const max = entries[0][1];
@@ -681,31 +651,18 @@ function getStoreAdvancedMetrics(s){
   const avgItems = m.success > 0 ? (m.items / m.success) : 0;
   const restockCycle = calcRestockCycle(s.id);
   const strongWeekdays = calcStrongWeekdays(s.id);
-
-  return {
-    ...m,
-    avgItems,
-    restockCycle,
-    strongWeekdays
-  };
+  return { ...m, avgItems, restockCycle, strongWeekdays };
 }
 
 function extractLatLng(url){
   if(!url) return null;
   url = String(url).trim();
-
   let m = url.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
   if(m) return {lat: parseFloat(m[1]), lng: parseFloat(m[2])};
-
   m = url.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
   if(m) return {lat: parseFloat(m[1]), lng: parseFloat(m[2])};
-
   m = url.match(/[?&](?:q|query|ll|center)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
   if(m) return {lat: parseFloat(m[1]), lng: parseFloat(m[2])};
-
-  m = url.match(/\/dir\/[^/]*\/(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
-  if(m) return {lat: parseFloat(m[1]), lng: parseFloat(m[2])};
-
   return null;
 }
 
@@ -722,20 +679,13 @@ async function resolveGoogleSharedLink(url){
 async function geocodeAddress(address, pref="", name=""){
   const q = [pref, address, name].map(v=>String(v || "").trim()).filter(Boolean).join(" ");
   if(!q) return null;
-
   const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=jp&accept-language=ja&q=${encodeURIComponent(q)}`;
-
   try{
-    const res = await fetch(endpoint, {
-      headers: { "Accept":"application/json" }
-    });
+    const res = await fetch(endpoint, { headers: { "Accept":"application/json" } });
     if(!res.ok) return null;
     const data = await res.json();
-    if(!Array.isArray(data) || data.length===0) return null;
-    return {
-      lat: parseFloat(data[0].lat),
-      lng: parseFloat(data[0].lon)
-    };
+    if(!Array.isArray(data) || !data.length) return null;
+    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
   }catch(e){
     return null;
   }
@@ -747,17 +697,14 @@ async function resolveStoreLocation({ mapUrl, address, pref, name }){
 
   if(url){
     const direct = extractLatLng(url);
-    if(direct) return { ...direct, mapUrl:url, source:"url" };
-
+    if(direct) return { ...direct, mapUrl:url };
     const shared = await resolveGoogleSharedLink(url);
-    if(shared) return { lat:shared.lat, lng:shared.lng, mapUrl:shared.finalUrl || url, source:"shared" };
+    if(shared) return { lat:shared.lat, lng:shared.lng, mapUrl:shared.finalUrl || url };
   }
-
   if(addr){
     const geo = await geocodeAddress(addr, pref, name);
-    if(geo) return { ...geo, mapUrl:url, source:"address" };
+    if(geo) return { ...geo, mapUrl:url };
   }
-
   return null;
 }
 
@@ -765,26 +712,21 @@ function openMapSearchFromAddress(){
   const address = (document.getElementById("address").value || "").trim();
   const pref = (document.getElementById("prefName").value || "").trim();
   const name = (document.getElementById("storeName").value || "").trim();
-
   const q = [pref, address, name].filter(Boolean).join(" ");
   if(!q){
     alert("住所か店舗名を入れてください。");
     return;
   }
-
-  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
-  window.open(url, "_blank");
+  window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, "_blank");
 }
 
 function addItemsToCategory(i, cat, delta){
   const s = stores[i];
   const category = String(cat || "").trim();
   if(!category) return;
-
   if(!s.categoryCounts || typeof s.categoryCounts !== "object") s.categoryCounts = {};
   const cur = clampNonNeg(s.categoryCounts[category] ?? 0);
   const next = clampNonNeg(cur + delta);
-
   if(next === 0) delete s.categoryCounts[category];
   else s.categoryCounts[category] = next;
 
@@ -801,14 +743,8 @@ function getAllCategories(){
   stores.forEach(s=>{
     const dc = (s.defaultCategory || "").trim();
     if(dc) set.add(dc);
-    (s.quickCategories || []).forEach(c=>{
-      c = String(c).trim();
-      if(c) set.add(c);
-    });
-    Object.keys(s.categoryCounts || {}).forEach(k=>{
-      k = String(k).trim();
-      if(k) set.add(k);
-    });
+    (s.quickCategories || []).forEach(c=>{ if(c) set.add(String(c).trim()); });
+    Object.keys(s.categoryCounts || {}).forEach(k=>{ if(k) set.add(String(k).trim()); });
   });
   return Array.from(set).sort((a,b)=>a.localeCompare(b,'ja'));
 }
@@ -831,15 +767,10 @@ let modalState = {
   addSuccess:false
 };
 
-function allocAbsTotal(){
-  return Math.abs(modalState.deltaItems || 0);
-}
-function allocAssigned(){
-  return modalState.allocations.reduce((sum,a)=>sum + (Number(a.count) || 0), 0);
-}
-function allocRemaining(){
-  return allocAbsTotal() - allocAssigned();
-}
+function allocAbsTotal(){ return Math.abs(modalState.deltaItems || 0); }
+function allocAssigned(){ return modalState.allocations.reduce((sum,a)=>sum + (Number(a.count) || 0), 0); }
+function allocRemaining(){ return allocAbsTotal() - allocAssigned(); }
+
 function upsertAllocation(cat, count){
   const key = String(cat || "").trim();
   const n = clampNonNeg(count);
@@ -851,9 +782,8 @@ function upsertAllocation(cat, count){
   if(idx >= 0) modalState.allocations[idx].count = n;
   else modalState.allocations.push({cat:key, count:n});
 }
-function labelCat(cat){
-  return cat ? cat : "カテゴリなし";
-}
+function labelCat(cat){ return cat ? cat : "カテゴリなし"; }
+
 function rebuildAllocSummary(){
   const status = document.getElementById("allocStatus");
   const summary = document.getElementById("allocSummary");
@@ -867,7 +797,6 @@ function rebuildAllocSummary(){
     summary.innerHTML = `<div class="small">まだカテゴリ配分がありません。</div>`;
     return;
   }
-
   summary.innerHTML = modalState.allocations.map(a => `
     <div class="allocLine">
       <div>${escapeHtml(labelCat(a.cat))}</div>
@@ -875,6 +804,7 @@ function rebuildAllocSummary(){
     </div>
   `).join("");
 }
+
 function promptAllocation(cat){
   const key = String(cat || "").trim();
   const existing = modalState.allocations.find(a => a.cat === key);
@@ -905,6 +835,7 @@ function promptAllocation(cat){
   rebuildAllocSummary();
   rebuildChips();
 }
+
 function openCategoryModal(storeIndex, deltaItems, title, addSuccess=false){
   const s = stores[storeIndex];
   modalState.open = true;
@@ -918,13 +849,12 @@ function openCategoryModal(storeIndex, deltaItems, title, addSuccess=false){
   document.getElementById("customCat").value = "";
   rebuildChips();
   rebuildAllocSummary();
-
   document.getElementById("overlay").style.display = "flex";
 }
+
 function rebuildChips(){
   const area = document.getElementById("chipArea");
   area.innerHTML = "";
-
   const s = stores[modalState.storeIndex];
   const chips = [];
 
@@ -955,10 +885,10 @@ function rebuildChips(){
   noneBtn.onclick = () => promptAllocation("");
   area.appendChild(noneBtn);
 }
+
 function addCustomCategory(){
   const v = document.getElementById("customCat").value.trim();
   if(!v) return;
-
   const s = stores[modalState.storeIndex];
   if(!s.quickCategories) s.quickCategories = [];
   if(!s.quickCategories.includes(v)){
@@ -970,6 +900,7 @@ function addCustomCategory(){
   promptAllocation(v);
   rebuildChips();
 }
+
 function closeModal(commit){
   document.getElementById("overlay").style.display = "none";
   modalState.open = false;
@@ -1012,10 +943,7 @@ async function addStore(){
   const mapUrl = document.getElementById("mapUrl").value.trim();
   if(!name) return;
 
-  let lat = null;
-  let lng = null;
-  let finalMapUrl = mapUrl;
-
+  let lat = null, lng = null, finalMapUrl = mapUrl;
   try{
     const resolved = await resolveStoreLocation({ mapUrl, address, pref, name });
     if(resolved){
@@ -1033,8 +961,7 @@ async function addStore(){
     items:0,
     profit:0,
     mapUrl:finalMapUrl,
-    lat,
-    lng,
+    lat, lng,
     defaultCategory:"",
     categoryCounts:{},
     quickCategories:[],
@@ -1051,40 +978,25 @@ async function addStore(){
   clearNearbyMode();
   render();
   renderTodayPlan();
-
-  if(address || mapUrl){
-    if(typeof lat === "number" && typeof lng === "number"){
-      alert("店舗を追加しました。座標も取得できました。");
-    }else{
-      alert("店舗を追加しました。座標は取得できなかったため、必要なら「地図検索」→共有リンクで補完してください。");
-    }
-  }
 }
 
 async function editStore(i){
   const s = stores[i];
-
   const newName = prompt("店舗名", s.name || "");
-  if(newName===null) return;
+  if(newName === null) return;
   const nameTrim = String(newName).trim();
   if(!nameTrim) return;
 
-  const newPref = prompt("都道府県", (s.pref || "").trim());
-  if(newPref===null) return;
-
-  const newAddr = prompt("住所", (s.address || "").trim());
-  if(newAddr===null) return;
-
-  const newUrl = prompt("Googleマップ共有リンク or URL（空欄OK）", (s.mapUrl || "").trim());
-  if(newUrl===null) return;
-
+  const newPref = prompt("都道府県", s.pref || "");
+  if(newPref === null) return;
+  const newAddr = prompt("住所", s.address || "");
+  if(newAddr === null) return;
+  const newUrl = prompt("Googleマップ共有リンク or URL", s.mapUrl || "");
+  if(newUrl === null) return;
   const newQuick = prompt("よく使うカテゴリ（/区切り）", (s.quickCategories || []).join("/"));
-  if(newQuick===null) return;
+  if(newQuick === null) return;
 
-  let lat = null;
-  let lng = null;
-  let finalMapUrl = String(newUrl).trim();
-
+  let lat = null, lng = null, finalMapUrl = String(newUrl).trim();
   try{
     const resolved = await resolveStoreLocation({
       mapUrl: finalMapUrl,
@@ -1111,15 +1023,10 @@ async function editStore(i){
   clearNearbyMode();
   render();
   renderTodayPlan();
-
-  if((s.address || s.mapUrl) && !(typeof s.lat === "number" && typeof s.lng === "number")){
-    alert("更新しました。座標は取得できなかったため、必要なら共有リンクで補完してください。");
-  }
 }
 
 function deleteStore(i){
-  const ok = confirm(`「${stores[i].name}」を削除しますか？`);
-  if(!ok) return;
+  if(!confirm(`「${stores[i].name}」を削除しますか？`)) return;
   stores.splice(i,1);
   saveAll();
   clearNearbyMode();
@@ -1129,41 +1036,28 @@ function deleteStore(i){
 
 function navigateToStore(i){
   const s = stores[i];
-
   if(typeof s.lat === "number" && typeof s.lng === "number"){
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.lat + "," + s.lng)}&travelmode=driving`;
-    window.open(url, "_blank");
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.lat + "," + s.lng)}&travelmode=driving`, "_blank");
     return;
   }
-
   if((s.address || "").trim()){
-    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address.trim())}`;
-    window.open(url, "_blank");
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address.trim())}`, "_blank");
     return;
   }
-
   alert("住所または座標が登録されていません。");
 }
 
 async function retryMissingCoords(){
   const targets = stores
     .map((s, i) => ({ s, i }))
-    .filter(x =>
-      ((x.s.address || "").trim() || (x.s.mapUrl || "").trim()) &&
-      !(typeof x.s.lat === "number" && typeof x.s.lng === "number")
-    );
+    .filter(x => ((x.s.address || "").trim() || (x.s.mapUrl || "").trim()) && !(typeof x.s.lat === "number" && typeof x.s.lng === "number"));
 
-  if(targets.length === 0){
+  if(!targets.length){
     alert("座標未登録の店舗はありません。");
     return;
   }
 
-  const ok = confirm(`座標未登録の ${targets.length} 件を再取得しますか？`);
-  if(!ok) return;
-
-  let success = 0;
-  let fail = 0;
-
+  let success = 0, fail = 0;
   for(const t of targets){
     try{
       const resolved = await resolveStoreLocation({
@@ -1172,15 +1066,12 @@ async function retryMissingCoords(){
         pref: t.s.pref || "",
         name: t.s.name || ""
       });
-
       if(resolved && typeof resolved.lat === "number" && typeof resolved.lng === "number"){
         stores[t.i].lat = resolved.lat;
         stores[t.i].lng = resolved.lng;
         stores[t.i].mapUrl = resolved.mapUrl || stores[t.i].mapUrl || "";
         success++;
-      }else{
-        fail++;
-      }
+      }else fail++;
     }catch(e){
       fail++;
     }
@@ -1189,41 +1080,22 @@ async function retryMissingCoords(){
   saveAll();
   render();
   renderTodayPlan();
-
   alert(`再取得完了\n成功: ${success}件\n失敗: ${fail}件`);
 }
 
 function showMissingCoordsOnly(){
   clearNearbyMode();
-
   const list = document.getElementById("storeList");
-
   const targets = stores
-    .map((s, idx) => {
-      const m = getStoreAdvancedMetrics(s);
-      return {
-        ...s,
-        _idx: idx,
-        _m: m,
-        _dist: null,
-        _score: null,
-        _isNearby: false
-      };
-    })
-    .filter(s =>
-      ((s.address || "").trim() || (s.mapUrl || "").trim()) &&
-      !(typeof s.lat === "number" && typeof s.lng === "number")
-    );
+    .map((s, idx) => ({ ...s, _idx: idx, _m: getStoreAdvancedMetrics(s), _dist: null, _score: null, _isNearby: false }))
+    .filter(s => ((s.address || "").trim() || (s.mapUrl || "").trim()) && !(typeof s.lat === "number" && typeof s.lng === "number"));
 
-  if(targets.length === 0){
+  if(!targets.length){
     list.innerHTML = `<div class="gray" style="margin-top:14px;">座標未登録の店舗はありません。</div>`;
     return;
   }
-
   list.innerHTML = `<div class="sectionTitle">📍 座標なし店舗</div>`;
-  targets.forEach(s => {
-    list.innerHTML += renderStoreCard(s, false);
-  });
+  targets.forEach(s => list.innerHTML += renderStoreCard(s, false));
 }
 
 function toggleToday(i, checked){
@@ -1232,7 +1104,6 @@ function toggleToday(i, checked){
   renderTodayPlan();
   renderMapMarkers();
 }
-
 function visit(i){
   const s = stores[i];
   s.visits++;
@@ -1249,45 +1120,31 @@ function visitMinus(i){
   saveAll();
   render();
 }
-
 function itemsPlus(i){
-  const numStr = prompt("追加する個数は？", "1");
-  if(numStr!==null && String(numStr).trim()!==""){
-    const n = clampNonNeg(parseInt(numStr,10));
-    if(n <= 0) return;
-    openCategoryModal(i, n, "カテゴリ配分（個数＋）", true);
-  }
+  const n = clampNonNeg(parseInt(prompt("追加する個数は？", "1"),10));
+  if(n > 0) openCategoryModal(i, n, "カテゴリ配分（個数＋）", true);
 }
 function itemsMinus(i){
-  const numStr = prompt("減らす個数は？", "1");
-  if(numStr!==null && String(numStr).trim()!==""){
-    const n = clampNonNeg(parseInt(numStr,10));
-    if(n <= 0) return;
-    openCategoryModal(i, -n, "カテゴリ配分（個数−）", false);
-  }
+  const n = clampNonNeg(parseInt(prompt("減らす個数は？", "1"),10));
+  if(n > 0) openCategoryModal(i, -n, "カテゴリ配分（個数−）", false);
 }
-
 function profitPlus(i){
-  const s = stores[i];
-  const yen = prompt("追加する利益（円）は？", "1000");
-  if(yen!==null && String(yen).trim()!==""){
-    const d = clampNonNeg(parseInt(yen,10));
-    s.profit += d;
-    addLog(s.id, "profit", d);
+  const d = clampNonNeg(parseInt(prompt("追加する利益（円）は？", "1000"),10));
+  if(d){
+    stores[i].profit += d;
+    addLog(stores[i].id, "profit", d);
+    saveAll();
+    render();
   }
-  saveAll();
-  render();
 }
 function profitMinus(i){
-  const s = stores[i];
-  const yen = prompt("利益減算（円）は？", "1000");
-  if(yen!==null && String(yen).trim()!==""){
-    const d = clampNonNeg(parseInt(yen,10));
-    s.profit = clampNonNeg(s.profit - d);
-    addLog(s.id, "profit", -d);
+  const d = clampNonNeg(parseInt(prompt("利益減算（円）は？", "1000"),10));
+  if(d){
+    stores[i].profit = clampNonNeg(stores[i].profit - d);
+    addLog(stores[i].id, "profit", -d);
+    saveAll();
+    render();
   }
-  saveAll();
-  render();
 }
 
 function distanceKm(lat1,lng1,lat2,lng2){
@@ -1308,7 +1165,7 @@ function optimizeRoute(){
     return;
   }
   navigator.geolocation.getCurrentPosition(
-    (pos)=>{
+    pos=>{
       lastPos = {lat: pos.coords.latitude, lng: pos.coords.longitude};
       clearNearbyMode();
       document.getElementById("sortType").value = "route";
@@ -1316,7 +1173,7 @@ function optimizeRoute(){
       renderTodayPlan();
       renderMapMarkers();
     },
-    ()=>{ alert("位置情報が取得できませんでした。"); },
+    ()=> alert("位置情報が取得できませんでした。"),
     {enableHighAccuracy:true, timeout:10000}
   );
 }
@@ -1326,25 +1183,22 @@ function showNearbyStores(){
     alert("位置情報が使えません");
     return;
   }
-
   navigator.geolocation.getCurrentPosition(
-    (pos)=>{
+    pos=>{
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       lastPos = {lat, lng};
-
       nearbyStoreIds = new Set();
       stores.forEach(s=>{
         if(typeof s.lat !== "number" || typeof s.lng !== "number") return;
         const dist = distanceKm(lat, lng, s.lat, s.lng);
         if(dist <= 3) nearbyStoreIds.add(s.id);
       });
-
       nearbyMode = true;
       render();
       renderMapMarkers();
     },
-    ()=>{ alert("位置情報が取得できませんでした。"); },
+    ()=> alert("位置情報が取得できませんでした。"),
     {enableHighAccuracy:true, timeout:10000}
   );
 }
@@ -1357,22 +1211,15 @@ function clearNearbyMode(){
 function buildTodayPrefSelect(){
   const sel = document.getElementById("todayPrefSelect");
   const set = new Set();
-  stores.forEach(s=>{
-    const p = (s.pref || "").trim();
-    if(p) set.add(p);
-  });
+  stores.forEach(s=>{ if((s.pref || "").trim()) set.add(s.pref.trim()); });
   const prefs = Array.from(set).sort((a,b)=>a.localeCompare(b,'ja'));
   const cur = sel.value || "__ALL__";
-
   sel.innerHTML = `<option value="__ALL__">（全都道府県）</option>`;
-  prefs.forEach(p=>{
-    sel.innerHTML += `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`;
-  });
-
+  prefs.forEach(p=> sel.innerHTML += `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`);
   if(Array.from(sel.options).some(o=>o.value===cur)) sel.value = cur;
 }
 function bulkSetTodayByPref(prefValue, on){
-  const pref = (prefValue || "__ALL__");
+  const pref = prefValue || "__ALL__";
   stores.forEach(s=>{
     if(pref === "__ALL__" || (s.pref || "").trim() === pref){
       s.today = !!on;
@@ -1383,30 +1230,18 @@ function bulkSetTodayByPref(prefValue, on){
   renderTodayPlan();
   renderMapMarkers();
 }
-function todayBulkOn(){
-  bulkSetTodayByPref(document.getElementById("todayPrefSelect").value, true);
-}
-function todayBulkOff(){
-  bulkSetTodayByPref(document.getElementById("todayPrefSelect").value, false);
-}
-function todayBulkClearAll(){
-  bulkSetTodayByPref("__ALL__", false);
-}
+function todayBulkOn(){ bulkSetTodayByPref(document.getElementById("todayPrefSelect").value, true); }
+function todayBulkOff(){ bulkSetTodayByPref(document.getElementById("todayPrefSelect").value, false); }
+function todayBulkClearAll(){ bulkSetTodayByPref("__ALL__", false); }
 
 function buildPrefFilter(){
   const prefSet = new Set();
-  stores.forEach(s=>{
-    if((s.pref || "").trim()) prefSet.add(s.pref.trim());
-  });
+  stores.forEach(s=>{ if((s.pref || "").trim()) prefSet.add(s.pref.trim()); });
   const prefs = Array.from(prefSet).sort((a,b)=>a.localeCompare(b,'ja'));
-
   const sel = document.getElementById("prefFilter");
   const current = sel.value || "__ALL__";
   sel.innerHTML = `<option value="__ALL__">全て（都道府県ごと表示）</option>`;
-  prefs.forEach(p=>{
-    sel.innerHTML += `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`;
-  });
-
+  prefs.forEach(p=> sel.innerHTML += `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`);
   if(Array.from(sel.options).some(o=>o.value===current)) sel.value = current;
 }
 
@@ -1498,14 +1333,14 @@ function render(){
     const others = view.filter(s=>!s._isNearby);
 
     list.innerHTML += `<div class="sectionTitle">📍近くの店舗（3km以内）</div>`;
-    if(nearby.length === 0){
+    if(!nearby.length){
       list.innerHTML += `<div class="gray" style="margin-top:8px;">3km以内の登録店舗はありません。</div>`;
     }else{
       nearby.forEach(s => list.innerHTML += renderStoreCard(s, true));
     }
 
     list.innerHTML += `<div class="sectionTitle">その他の店舗</div>`;
-    if(others.length === 0){
+    if(!others.length){
       list.innerHTML += `<div class="gray" style="margin-top:8px;">その他の店舗はありません。</div>`;
     }else{
       others.forEach(s => list.innerHTML += renderStoreCard(s, false));
@@ -1545,8 +1380,7 @@ function render(){
 
   for(const groupKey of Array.from(grouped.keys())){
     const arr = grouped.get(groupKey) || [];
-    if(arr.length === 0) continue;
-
+    if(!arr.length) continue;
     list.innerHTML += `<div class="sectionTitle">${escapeHtml(groupKey)}</div>`;
     arr.forEach(s => list.innerHTML += renderStoreCard(s, false));
   }
@@ -1683,7 +1517,7 @@ function renderTodayPlan(){
   const area = document.getElementById("todayPlanArea");
   const todays = stores.map((s,idx)=>({...s,_idx:idx})).filter(s=>s.today);
 
-  if(todays.length === 0){
+  if(!todays.length){
     area.innerHTML = `<div class="gray">「今日行く」にチェックした店舗がありません。</div>`;
     return;
   }
@@ -1699,47 +1533,18 @@ function renderTodayPlan(){
     <div class="kv">
       <div class="pill"><b>今日行く</b> ${todays.length}店舗</div>
       <div class="pill"><b>ルート対象</b> ${coordOk.length}店舗</div>
-      <div class="pill"><b>現在地</b> ${lastPos ? "取得済み" : "未取得（必要なら効率更新を押して）"}</div>
+      <div class="pill"><b>現在地</b> ${lastPos ? "取得済み" : "未取得"}</div>
     </div>
   `;
   area.innerHTML = html;
 }
 
-function toggleMapPanel(){
-  const wrap = document.getElementById("mapWrap");
-  mapPanelOpen = !mapPanelOpen;
-  wrap.classList.toggle("show", mapPanelOpen);
-
-  if(mapPanelOpen){
-    initMap();
-    setTimeout(()=>{
-      if(map) map.invalidateSize();
-      renderMapMarkers();
-    }, 80);
-  }
-}
-
-function initMap(){
-  if(mapInitialized) return;
-
-  map = L.map("map", {
-    zoomControl: true
-  }).setView([35.681236, 139.767125], 6);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors"
-  }).addTo(map);
-
-  mapInitialized = true;
-}
-
 function getMarkerLevel(expected){
-  if(expected >= 3000) return "red";
-  if(expected >= 1500) return "orange";
-  if(expected >= 800) return "yellow";
+  if(expected >= 10000) return "red";
+  if(expected >= 3000) return "orange";
+  if(expected >= 1000) return "yellow";
   return "blue";
 }
-
 function makeMarkerIcon(level){
   return L.divIcon({
     html: `<div class="marker-pin marker-${level}"></div>`,
@@ -1749,12 +1554,30 @@ function makeMarkerIcon(level){
     popupAnchor: [0,-10]
   });
 }
-
+function toggleMapPanel(){
+  const wrap = document.getElementById("mapWrap");
+  mapPanelOpen = !mapPanelOpen;
+  wrap.classList.toggle("show", mapPanelOpen);
+  if(mapPanelOpen){
+    initMap();
+    setTimeout(()=>{
+      if(map) map.invalidateSize();
+      renderMapMarkers();
+    }, 80);
+  }
+}
+function initMap(){
+  if(mapInitialized) return;
+  map = L.map("map", { zoomControl: true }).setView([35.681236, 139.767125], 6);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+  mapInitialized = true;
+}
 function clearMapMarkers(){
   mapMarkers.forEach(m => map.removeLayer(m));
   mapMarkers = [];
 }
-
 function navigateUrlForStore(s){
   if(typeof s.lat === "number" && typeof s.lng === "number"){
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.lat + "," + s.lng)}&travelmode=driving`;
@@ -1764,10 +1587,8 @@ function navigateUrlForStore(s){
   }
   return "";
 }
-
 function renderMapMarkers(){
   if(!mapInitialized) return;
-
   clearMapMarkers();
 
   const q = (document.getElementById("q").value || "").trim();
@@ -1776,27 +1597,19 @@ function renderMapMarkers(){
   const minRate = clampNonNeg(parseFloat(document.getElementById("minRate").value || "0"));
 
   const visibleStores = stores
-    .map((s, idx)=>{
-      const m = getStoreAdvancedMetrics(s);
-      return {...s, _idx:idx, _m:m};
-    })
+    .map((s, idx)=>({ ...s, _idx:idx, _m:getStoreAdvancedMetrics(s) }))
     .filter(s=>typeof s.lat === "number" && typeof s.lng === "number")
     .filter(s=>matchesQuery(s,q))
     .filter(s=>prefFilter === "__ALL__" ? true : (s.pref || "").trim() === prefFilter)
     .filter(s=>s._m.expected >= minExpected && s._m.rate >= minRate);
 
-  if(visibleStores.length === 0){
-    return;
-  }
+  if(!visibleStores.length) return;
 
   const bounds = [];
-
   visibleStores.forEach(s=>{
-    const level = getMarkerLevel(s._m.expected);
-    const marker = L.marker([s.lat, s.lng], { icon: makeMarkerIcon(level) });
-
+    const marker = L.marker([s.lat, s.lng], { icon: makeMarkerIcon(getMarkerLevel(s._m.expected)) });
     const navUrl = navigateUrlForStore(s);
-    const popup = `
+    marker.bindPopup(`
       <div class="mapPopupTitle">${escapeHtml(s.name)}</div>
       <div class="mapPopupMeta">
         ${escapeHtml((s.pref || "").trim() || "未設定")}<br>
@@ -1808,21 +1621,15 @@ function renderMapMarkers(){
         強い曜日：${s._m.strongWeekdays.length ? s._m.strongWeekdays.join("/") : "—"}
       </div>
       ${navUrl ? `<a class="mapPopupBtn" href="${navUrl}" target="_blank" rel="noopener">ナビ</a>` : ""}
-    `;
-
-    marker.bindPopup(popup);
+    `);
     marker.addTo(map);
     mapMarkers.push(marker);
     bounds.push([s.lat, s.lng]);
   });
 
-  if(bounds.length === 1){
-    map.setView(bounds[0], 15);
-  }else{
-    map.fitBounds(bounds, { padding:[30,30] });
-  }
+  if(bounds.length === 1) map.setView(bounds[0], 15);
+  else map.fitBounds(bounds, { padding:[30,30] });
 }
-
 function moveMapToCurrentLocation(){
   if(!navigator.geolocation){
     alert("この端末では位置情報が使えません。");
@@ -1834,16 +1641,13 @@ function moveMapToCurrentLocation(){
     initMap();
     setTimeout(()=>map.invalidateSize(), 80);
   }
-
   navigator.geolocation.getCurrentPosition(
-    (pos)=>{
+    pos=>{
       lastPos = {lat: pos.coords.latitude, lng: pos.coords.longitude};
       map.setView([lastPos.lat, lastPos.lng], 15);
       renderMapMarkers();
     },
-    ()=>{
-      alert("現在地を取得できませんでした。");
-    },
+    ()=> alert("現在地を取得できませんでした。"),
     {enableHighAccuracy:true, timeout:10000}
   );
 }
@@ -1855,7 +1659,7 @@ function buildTodayRoute(){
   }
 
   navigator.geolocation.getCurrentPosition(
-    (pos)=>{
+    pos=>{
       lastPos = {lat: pos.coords.latitude, lng: pos.coords.longitude};
       const start = {lat:lastPos.lat, lng:lastPos.lng};
 
@@ -1864,7 +1668,7 @@ function buildTodayRoute(){
         .filter(s=>s.today)
         .filter(s=>typeof s.lat==="number" && typeof s.lng==="number");
 
-      if(targets.length === 0){
+      if(!targets.length){
         alert("今日行く店舗のうち、座標が入っている店舗がありません。");
         renderTodayPlan();
         return;
@@ -1906,7 +1710,6 @@ function buildTodayRoute(){
           <div class="pill"><b>推定移動距離</b> ${totalDist.toFixed(1)}km</div>
           <div class="pill"><b>予想総利益</b> ${Math.round(totalExpected).toLocaleString()}円</div>
         </div>
-
         <table>
           <thead><tr><th>#</th><th>店舗</th><th>距離</th><th>期待値</th><th>ルート効率</th><th>操作</th></tr></thead>
           <tbody>
@@ -1934,72 +1737,22 @@ function buildTodayRoute(){
         const origin = `${start.lat},${start.lng}`;
         const destination = `${chunk[chunk.length-1].lat},${chunk[chunk.length-1].lng}`;
         const waypoints = chunk.slice(0, chunk.length-1).map(s=>`${s.lat},${s.lng}`).join("|");
-
         const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}${waypoints ? `&waypoints=${encodeURIComponent(waypoints)}` : ""}&travelmode=driving`;
-
-        html += `
-          <div style="margin-top:10px;">
-            <a class="linkbtn" href="${url}" target="_blank" rel="noopener">🧭 ルート${index+1}をGoogleマップで開く（${chunk.length}件）</a>
-          </div>
-        `;
+        html += `<div style="margin-top:10px;"><a class="linkbtn" href="${url}" target="_blank" rel="noopener">🧭 ルート${index+1}をGoogleマップで開く（${chunk.length}件）</a></div>`;
       });
 
       area.innerHTML = html;
       renderMapMarkers();
     },
-    ()=>{ alert("位置情報が取得できませんでした。"); },
+    ()=> alert("位置情報が取得できませんでした。"),
     {enableHighAccuracy:true, timeout:10000}
   );
 }
 
-function updateBtnStyle(){
-  const font = Number(document.getElementById("btnFont").value || 16);
-  const pad  = Number(document.getElementById("btnPad").value || 10);
-  const rad  = Number(document.getElementById("btnRadius").value || 10);
-
-  document.documentElement.style.setProperty("--btn-font", font + "px");
-  document.documentElement.style.setProperty("--btn-pad", pad + "px");
-  document.documentElement.style.setProperty("--btn-radius", rad + "px");
-
-  localStorage.setItem(KEY_BTN_STYLE, JSON.stringify({font, pad, rad}));
-}
-
-function loadBtnStyle(){
-  try{
-    const s = JSON.parse(localStorage.getItem(KEY_BTN_STYLE) || "{}");
-    const font = Number(s.font || 16);
-    const pad  = Number(s.pad || 10);
-    const rad  = Number(s.rad || 10);
-
-    document.getElementById("btnFont").value = font;
-    document.getElementById("btnPad").value = pad;
-    document.getElementById("btnRadius").value = rad;
-
-    document.documentElement.style.setProperty("--btn-font", font + "px");
-    document.documentElement.style.setProperty("--btn-pad", pad + "px");
-    document.documentElement.style.setProperty("--btn-radius", rad + "px");
-  }catch(e){}
-}
-
-function toggleBtnSetting(){
-  const cur = localStorage.getItem(KEY_BTN_VISIBLE);
-  const next = (cur === "0") ? "1" : "0";
-  localStorage.setItem(KEY_BTN_VISIBLE, next);
-  applyBtnSettingVisibility();
-}
-function applyBtnSettingVisibility(){
-  const visible = (localStorage.getItem(KEY_BTN_VISIBLE) ?? "1") !== "0";
-  document.getElementById("btnSettingWrap").style.display = visible ? "block" : "none";
-  document.getElementById("toggleBtnSettingBtn").textContent = visible ? "非表示" : "表示";
-}
-
 (function init(){
-  loadBtnStyle();
-  applyBtnSettingVisibility();
   render();
   renderTodayPlan();
 })();
 </script>
-
 </body>
 </html>
