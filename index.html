@@ -279,7 +279,12 @@
 </div>
 
 <input id="address" placeholder="住所（これだけでもOK）">
-<input id="mapUrl" placeholder="Googleマップ共有リンク（任意）">
+
+<div class="row2">
+  <input id="mapUrl" placeholder="Googleマップ共有リンク（任意）">
+  <button class="secondary" onclick="openMapSearchFromAddress()">地図検索</button>
+</div>
+
 <button onclick="addStore()">店舗追加</button>
 
 <div class="toolbar">
@@ -329,10 +334,9 @@
   </div>
 
   <div class="gray">
+    ※ 住所を入れて「地図検索」を押すとGoogleマップ検索を開けます。<br>
+    ※ Googleマップで店舗を開いたら「共有 → リンクをコピー」して共有リンク欄に貼ると安定します。<br>
     ※ 個数＋ を押すと「成功」も自動で +1 されます。<br>
-    ※ 個数入力後、カテゴリは複数に分けて登録できます。<br>
-    ※ 住所だけでも登録できます。座標取得に失敗しても保存は止まりません。<br>
-    ※ 共有リンクがあれば優先して使います。<br>
     ※ 座標がない店舗は距離が「—」になりますが、ナビは使えます。
   </div>
 </div>
@@ -517,7 +521,6 @@ function extractLatLng(url){
   return null;
 }
 
-/* 安定版では共有リンクや住所解決に失敗しても保存を止めない */
 async function resolveGoogleSharedLink(url){
   try{
     const res = await fetch(url, { method:"GET", redirect:"follow", mode:"cors" });
@@ -568,6 +571,21 @@ async function resolveStoreLocation({ mapUrl, address, pref, name }){
   }
 
   return null;
+}
+
+function openMapSearchFromAddress(){
+  const address = (document.getElementById("address").value || "").trim();
+  const pref = (document.getElementById("prefName").value || "").trim();
+  const name = (document.getElementById("storeName").value || "").trim();
+
+  const q = [pref, address, name].filter(Boolean).join(" ");
+  if(!q){
+    alert("住所か店舗名を入れてください。");
+    return;
+  }
+
+  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+  window.open(url, "_blank");
 }
 
 function addItemsToCategory(i, cat, delta){
@@ -850,7 +868,7 @@ async function addStore(){
     if(typeof lat === "number" && typeof lng === "number"){
       alert("店舗を追加しました。座標も取得できました。");
     }else{
-      alert("店舗を追加しました。座標は取得できなかったため、距離は後で再取得してください。");
+      alert("店舗を追加しました。座標は取得できなかったため、必要なら「地図検索」→共有リンクで補完してください。");
     }
   }
 }
@@ -907,7 +925,7 @@ async function editStore(i){
   renderTodayPlan();
 
   if((s.address || s.mapUrl) && !(typeof s.lat === "number" && typeof s.lng === "number")){
-    alert("更新しました。座標は取得できなかったため、距離は後で再取得してください。");
+    alert("更新しました。座標は取得できなかったため、必要なら共有リンクで補完してください。");
   }
 }
 
@@ -1595,8 +1613,8 @@ function loadBtnStyle(){
   try{
     const s = JSON.parse(localStorage.getItem(KEY_BTN_STYLE) || "{}");
     const font = Number(s.font || 16);
-    const pad  = Number(s.pad  || 10);
-    const rad  = Number(s.rad  || 10);
+    const pad  = Number(s.pad || 10);
+    const rad  = Number(s.rad || 10);
 
     document.getElementById("btnFont").value = font;
     document.getElementById("btnPad").value = pad;
