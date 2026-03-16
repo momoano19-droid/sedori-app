@@ -48,6 +48,7 @@
   .badge{display:inline-block; padding:2px 8px; border-radius:999px; background:#eef2f7; color:#334; font-size:12px; margin:4px 6px 0 0;}
   .badge.addr{background:#fff0d6; color:#6a3d00; border:1px solid #ffd59a;}
   .badge.near{background:#e6ffed; color:#126b2e; border:1px solid #a7efb5;}
+  .badge.noCoord{background:#fff1f0; color:#a8071a; border:1px solid #ffa39e;}
   .kv{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
   .pill{background:#f0f3f8; border-radius:999px; padding:6px 10px; font-size:13px;}
   .sectionTitle{font-weight:800; color:#223; margin-top:18px;}
@@ -142,6 +143,11 @@
   <div class="row2">
     <button onclick="showNearbyStores()">📍近くの店舗（3km）</button>
     <button class="secondary" onclick="clearNearbyMode(); render();">通常表示に戻す</button>
+  </div>
+
+  <div class="row2">
+    <button class="secondary" onclick="retryMissingCoords()">📡 座標なし店舗を一括再取得</button>
+    <button class="secondary" onclick="showMissingCoordsOnly()">📍 座標なし店舗を見る</button>
   </div>
 
   <div class="row2" style="margin-top:8px;">
@@ -518,6 +524,7 @@ function promptAllocation(cat){
   }
 
   rebuildAllocSummary();
+  rebuildChips();
 }
 function openCategoryModal(storeIndex, deltaItems, title, addSuccess=false){
   const s = stores[storeIndex];
@@ -746,6 +753,87 @@ function navigateToStore(i){
   alert("住所または座標が登録されていません。");
 }
 
+async function retryMissingCoords(){
+  const targets = stores
+    .map((s, i) => ({ s, i }))
+    .filter(x =>
+      ((x.s.address || "").trim() || (x.s.mapUrl || "").trim()) &&
+      !(typeof x.s.lat === "number" && typeof x.s.lng === "number")
+    );
+
+  if(targets.length === 0){
+    alert("座標未登録の店舗はありません。");
+    return;
+  }
+
+  const ok = confirm(`座標未登録の ${targets.length} 件を再取得しますか？`);
+  if(!ok) return;
+
+  let success = 0;
+  let fail = 0;
+
+  for(const t of targets){
+    try{
+      const resolved = await resolveStoreLocation({
+        mapUrl: t.s.mapUrl || "",
+        address: t.s.address || "",
+        pref: t.s.pref || "",
+        name: t.s.name || ""
+      });
+
+      if(resolved && typeof resolved.lat === "number" && typeof resolved.lng === "number"){
+        stores[t.i].lat = resolved.lat;
+        stores[t.i].lng = resolved.lng;
+        stores[t.i].mapUrl = resolved.mapUrl || stores[t.i].mapUrl || "";
+        success++;
+      }else{
+        fail++;
+      }
+    }catch(e){
+      fail++;
+    }
+  }
+
+  saveAll();
+  render();
+  renderTodayPlan();
+
+  alert(`再取得完了\n成功: ${success}件\n失敗: ${fail}件`);
+}
+
+function showMissingCoordsOnly(){
+  clearNearbyMode();
+
+  const list = document.getElementById("storeList");
+
+  const targets = stores
+    .map((s, idx) => {
+      const m = calcMetrics(s);
+      return {
+        ...s,
+        _idx: idx,
+        _m: m,
+        _dist: null,
+        _score: null,
+        _isNearby: false
+      };
+    })
+    .filter(s =>
+      ((s.address || "").trim() || (s.mapUrl || "").trim()) &&
+      !(typeof s.lat === "number" && typeof s.lng === "number")
+    );
+
+  if(targets.length === 0){
+    list.innerHTML = `<div class="gray" style="margin-top:14px;">座標未登録の店舗はありません。</div>`;
+    return;
+  }
+
+  list.innerHTML = `<div class="sectionTitle">📍 座標なし店舗</div>`;
+  targets.forEach(s => {
+    list.innerHTML += renderStoreCard(s, false);
+  });
+}
+
 function toggleToday(i, checked){
   stores[i].today = !!checked;
   saveAll();
@@ -961,6 +1049,7 @@ function buildCardHeader(s, i, extraBadgesHtml=""){
     <div>
       <span class="badge">${escapeHtml((s.pref||"").trim() || "未設定")}</span>
       ${(s.address||"").trim() ? `<span class="badge addr">📍 住所あり</span>` : ""}
+      ${!(typeof s.lat==="number" && typeof s.lng==="number") ? `<span class="badge noCoord">座標なし</span>` : ""}
       ${(s.defaultCategory||"").trim() ? `<span class="badge">カテゴリ:${escapeHtml(s.defaultCategory.trim())}</span>` : ""}
       ${s.lastVisitDate ? `<span class="badge">最終訪問:${escapeHtml(s.lastVisitDate)}</span>` : ""}
       ${s.today ? `<span class="badge">今日行く</span>` : ""}
