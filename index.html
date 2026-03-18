@@ -1754,5 +1754,90 @@ function buildTodayRoute(){
   renderTodayPlan();
 })();
 </script>
+
+  <div style="position:fixed; right:12px; bottom:12px; z-index:9999; display:flex; gap:8px; flex-wrap:wrap;">
+  <button onclick="exportOldBackup()" style="padding:10px 14px; border:none; border-radius:10px; background:#007aff; color:#fff; font-size:14px;">
+    📦 データ書き出し
+  </button>
+
+  <label style="padding:10px 14px; border:none; border-radius:10px; background:#34c759; color:#fff; font-size:14px; display:inline-block; cursor:pointer;">
+    📥 データ読込
+    <input type="file" accept=".json,application/json" style="display:none" onchange="importOldBackup(event)">
+  </label>
+</div>
+
+<script>
+function exportOldBackup(){
+  try{
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      stores: JSON.parse(localStorage.getItem("stores") || "[]"),
+      logs: JSON.parse(localStorage.getItem("logs") || "[]"),
+      layout: localStorage.getItem("layout") || "default"
+    };
+
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "backup.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    URL.revokeObjectURL(url);
+    alert("backup.json を書き出しました。");
+  }catch(e){
+    console.error(e);
+    alert("書き出しに失敗しました。");
+  }
+}
+
+function importOldBackup(event){
+  const file = event.target.files && event.target.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function(e){
+    try{
+      const text = e.target.result;
+      const data = JSON.parse(text);
+
+      if(!data || typeof data !== "object"){
+        throw new Error("JSON形式が不正です");
+      }
+
+      if(!Array.isArray(data.stores) || !Array.isArray(data.logs)){
+        throw new Error("stores または logs がありません");
+      }
+
+      const ok = confirm("現在のデータをバックアップで上書きします。よろしいですか？");
+      if(!ok){
+        event.target.value = "";
+        return;
+      }
+
+      localStorage.setItem("stores", JSON.stringify(data.stores));
+      localStorage.setItem("logs", JSON.stringify(data.logs));
+      localStorage.setItem("layout", data.layout || "default");
+
+      alert("データを読み込みました。再読み込みします。");
+      location.reload();
+    }catch(err){
+      console.error(err);
+      alert("読み込みに失敗しました。JSONファイルを確認してください。");
+    }finally{
+      event.target.value = "";
+    }
+  };
+
+  reader.readAsText(file, "utf-8");
+}
+</script>
+  
 </body>
 </html>
