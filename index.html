@@ -1838,6 +1838,37 @@ function importOldBackup(event){
   reader.readAsText(file, "utf-8");
 }
 </script>
+
+  <div style="position:fixed; right:12px; bottom:12px; z-index:9999;">
+  <button onclick="exportOldBackup()" style="padding:12px 16px; border:none; border-radius:12px; background:#007aff; color:#fff; font-size:14px;">
+    📦 書き出し
+  </button>
+</div>
+
+<script>
+function exportOldBackup(){
+  try{
+    const data = {
+      stores: JSON.parse(localStorage.getItem("stores") || "[]"),
+      logs: JSON.parse(localStorage.getItem("logs") || "[]"),
+      layout: localStorage.getItem("layout") || "default"
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "backup.json";
+    a.click();
+
+    alert("バックアップ保存しました！");
+  }catch(e){
+    alert("失敗しました");
+    console.error(e);
+  }
+}
+</script>
   
 </body>
 </html>
